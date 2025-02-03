@@ -43,9 +43,13 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
         }
       }
 
+      // Extract contract name from source code
+      const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
+      const contractName = contractNameMatch ? contractNameMatch[1] : 'New Contract';
+
       // Save compilation result to database
       await apiRequest('POST', '/api/contracts', {
-        name: 'New Contract',
+        name: contractName,
         sourceCode,
         abi: result.abi,
         bytecode: result.bytecode
@@ -78,14 +82,23 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
 
   return (
     <Card className="p-4">
-      <Button 
-        onClick={handleCompile} 
-        disabled={compiling}
-        className="w-full"
-      >
-        {compiling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Compile Contract
-      </Button>
+      <div className="flex gap-2">
+        <Button 
+          onClick={handleCompile} 
+          disabled={compiling}
+          className="flex-1"
+        >
+          {compiling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Compile Contract
+        </Button>
+        <Button 
+          variant="secondary" 
+          className="flex-1"
+          disabled={!sourceCode.trim() || compiling}
+        >
+          Deploy Contract
+        </Button>
+      </div>
 
       {error && (
         <Alert variant="destructive" className="mt-4">
