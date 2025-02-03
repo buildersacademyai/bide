@@ -21,7 +21,10 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
     const output = JSON.parse(solc.compile(JSON.stringify(input)));
 
     if (output.errors?.length) {
-      const errors = output.errors.filter((e: any) => e.severity === 'error');
+      const errors = output.errors
+        .filter((e: any) => e.severity === 'error')
+        .map((e: any) => e.formattedMessage);
+
       if (errors.length > 0) {
         return { 
           abi: [], 
@@ -46,12 +49,11 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
   }
 }
 
-async function loadSolcJs() {
-  const solcjs = await new Promise((resolve, reject) => {
+async function loadSolcJs(): Promise<any> {
+  return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = `https://binaries.soliditylang.org/bin/soljson-${SOLC_VERSION}.js`;
     script.onload = () => {
-      // Wait for the Module to be fully initialized
       const checkForModule = () => {
         if ((window as any).Module) {
           resolve((window as any).Module);
@@ -64,6 +66,4 @@ async function loadSolcJs() {
     script.onerror = () => reject(new Error('Failed to load Solidity compiler'));
     document.head.appendChild(script);
   });
-
-  return solcjs;
 }
