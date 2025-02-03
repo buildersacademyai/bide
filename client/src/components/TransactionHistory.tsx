@@ -28,29 +28,41 @@ export function TransactionHistory({ address }: Props) {
   useEffect(() => {
     async function fetchTransactions() {
       if (!address || !window.ethereum) return;
-      
+
       setIsLoading(true);
       setError(null);
-      
+
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
-        const network = await provider.getNetwork();
-        
-        // Get the last 50 transactions
-        const history = await provider.getHistory(address, -50);
-        
-        const formattedTransactions = await Promise.all(
-          history.map(async (tx) => {
-            const block = await provider.getBlock(tx.blockNumber!);
-            return {
+        const currentBlock = await provider.getBlockNumber();
+        const lastBlock = Math.max(0, currentBlock - 100); // Get last 100 blocks
+
+        const txPromises = [];
+        for (let i = currentBlock; i >= lastBlock; i--) {
+          txPromises.push(provider.getBlock(i, true));
+        }
+
+        const blocks = await Promise.all(txPromises);
+        const formattedTransactions: Transaction[] = [];
+
+        for (const block of blocks) {
+          if (!block || !block.transactions) continue;
+
+          const txs = block.transactions.filter(tx => 
+            tx.from.toLowerCase() === address.toLowerCase() || 
+            (tx.to && tx.to.toLowerCase() === address.toLowerCase())
+          );
+
+          for (const tx of txs) {
+            formattedTransactions.push({
               hash: tx.hash,
               from: tx.from,
               to: tx.to || 'Contract Creation',
-              value: ethers.formatEther(tx.value || '0'),
-              timestamp: block ? Number(block.timestamp) : Date.now() / 1000,
-            };
-          })
-        );
+              value: ethers.formatEther(tx.value),
+              timestamp: Number(block.timestamp)
+            });
+          }
+        }
 
         setTransactions(formattedTransactions.sort((a, b) => b.timestamp - a.timestamp));
       } catch (err) {
@@ -108,61 +120,58 @@ export function TransactionHistory({ address }: Props) {
   }
 
   return (
-    <Card className="p-6">
-      <h2 className="text-xl font-semibold mb-4">Recent Transactions</h2>
-      <ScrollArea className="h-[400px] pr-4">
-        <div className="space-y-4">
-          {transactions.map((tx) => (
-            <div
-              key={tx.hash}
-              className="p-4 border rounded-lg hover:border-primary/50 transition-colors"
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={tx.from.toLowerCase() === address.toLowerCase() ? "destructive" : "success"}>
-                      {tx.from.toLowerCase() === address.toLowerCase() ? 'Sent' : 'Received'}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {new Date(tx.timestamp * 1000).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">From: </span>
-                      <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                        {tx.from.slice(0, 8)}...{tx.from.slice(-6)}
-                      </code>
-                    </div>
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">To: </span>
-                      <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                        {typeof tx.to === 'string' ? `${tx.to.slice(0, 8)}...${tx.to.slice(-6)}` : tx.to}
-                      </code>
-                    </div>
-                  </div>
+    <ScrollArea className="h-[400px] pr-4">
+      <div className="space-y-4">
+        {transactions.map((tx) => (
+          <div
+            key={tx.hash}
+            className="p-4 border rounded-lg hover:border-primary/50 transition-colors"
+          >
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Badge variant={tx.from.toLowerCase() === address.toLowerCase() ? "destructive" : "outline"}>
+                    {tx.from.toLowerCase() === address.toLowerCase() ? 'Sent' : 'Received'}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {new Date(tx.timestamp * 1000).toLocaleString()}
+                  </span>
                 </div>
-                <div className="text-right">
-                  <div className="font-medium">{tx.value} ETH</div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs"
-                    onClick={() => window.open(`https://etherscan.io/tx/${tx.hash}`, '_blank')}
-                  >
-                    View <ExternalLink className="h-3 w-3 ml-1" />
-                  </Button>
+                <div className="space-y-1">
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">From: </span>
+                    <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                      {tx.from.slice(0, 8)}...{tx.from.slice(-6)}
+                    </code>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">To: </span>
+                    <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                      {typeof tx.to === 'string' ? `${tx.to.slice(0, 8)}...${tx.to.slice(-6)}` : tx.to}
+                    </code>
+                  </div>
                 </div>
               </div>
+              <div className="text-right">
+                <div className="font-medium">{tx.value} ETH</div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs"
+                  onClick={() => window.open(`https://etherscan.io/tx/${tx.hash}`, '_blank')}
+                >
+                  View <ExternalLink className="h-3 w-3 ml-1" />
+                </Button>
+              </div>
             </div>
-          ))}
-          {transactions.length === 0 && (
-            <div className="text-center text-muted-foreground py-8">
-              No transactions found
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-    </Card>
+          </div>
+        ))}
+        {transactions.length === 0 && (
+          <div className="text-center text-muted-foreground py-8">
+            No transactions found
+          </div>
+        )}
+      </div>
+    </ScrollArea>
   );
 }

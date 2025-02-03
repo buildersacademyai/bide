@@ -148,13 +148,13 @@ export default function Editor() {
       <div className="flex flex-1">
         <FileExplorer onFileSelect={handleFileSelect} />
 
-        <div className="flex-1 p-4 space-y-8 overflow-y-auto">
+        <div className="flex-1 p-4 space-y-5 overflow-y-auto">
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                 Smart Contract IDE
               </h1>
-              <p className="text-muted-foreground mt-2">
+              <p className="text-muted-foreground mt-1">
                 Write, compile, and deploy your smart contracts
               </p>
             </div>
