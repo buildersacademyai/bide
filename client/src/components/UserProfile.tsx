@@ -7,7 +7,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { User, Loader2, LogOut } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ethers } from "ethers";

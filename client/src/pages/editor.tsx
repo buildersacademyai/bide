@@ -12,7 +12,6 @@ import { CompilationResults } from '@/components/CompilationResults';
 import { DeployedContracts } from '@/components/DeployedContracts';
 import { ContractCompiler } from '@/components/ContractCompiler';
 import { ContractDeployer } from '@/components/ContractDeployer';
-import { UserProfile } from '@/components/UserProfile';
 import { TransactionHistory } from '@/components/TransactionHistory';
 import { ContractInteraction } from '@/components/ContractInteraction';
 
@@ -158,16 +157,13 @@ export default function Editor() {
                 Write, compile, and deploy your smart contracts
               </p>
             </div>
-
             {!isWalletLoading ? (
               !account ? (
                 <Button onClick={handleConnect} className="gap-2">
                   <Terminal className="w-4 h-4" />
                   Connect Wallet
                 </Button>
-              ) : (
-                <UserProfile address={account} />
-              )
+              ) : null
             ) : (
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             )}

@@ -1,10 +1,37 @@
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { UserProfile } from "./UserProfile";
+import { useQuery } from "@tanstack/react-query";
+import { getConnectedAccount, connectWallet } from "@/lib/web3";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 export function Navigation() {
   const [location] = useLocation();
+  const { toast } = useToast();
   const isAppPage = location === "/app";
+
+  const { data: address, isLoading } = useQuery({ 
+    queryKey: ['wallet'],
+    queryFn: getConnectedAccount,
+    refetchOnWindowFocus: true
+  });
+
+  const handleConnect = async () => {
+    try {
+      await connectWallet();
+      toast({
+        title: "Connected to wallet",
+        description: "Successfully connected to MetaMask",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Connection failed",
+        description: err instanceof Error ? err.message : "Failed to connect wallet",
+      });
+    }
+  };
 
   return (
     <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -46,7 +73,15 @@ export function Navigation() {
               </Link>
             )}
 
-            <UserProfile address={undefined} />
+            {isLoading ? (
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            ) : address ? (
+              <UserProfile address={address} />
+            ) : (
+              <Button onClick={handleConnect} className="gap-2">
+                Connect Wallet
+              </Button>
+            )}
           </div>
         </div>
       </div>
