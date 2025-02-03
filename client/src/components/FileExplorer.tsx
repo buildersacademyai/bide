@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Folder, FileCode, ChevronDown, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Folder, FileCode, ChevronDown, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Contract {
@@ -51,34 +51,33 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [itemToDelete, setItemToDelete] = useState<Contract | null>(null);
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
 
-  // Fetch contracts
-  const { data: contracts = [] } = useQuery<Contract[]>({
+  // Fetch contracts with proper error handling
+  const { data: contracts = [], isLoading } = useQuery<Contract[]>({
     queryKey: ['/api/contracts'],
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to load contracts",
+        description: error instanceof Error ? error.message : "Failed to fetch contracts",
+      });
+    },
   });
 
   // Create contract mutation
   const createMutation = useMutation({
     mutationFn: async (newContract: Partial<Contract>) => {
-      try {
-        const res = await fetch('/api/contracts', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(newContract),
-        });
+      const res = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newContract),
+      });
 
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.message || 'Failed to create item');
-        }
-
-        return res.json();
-      } catch (error) {
-        console.error('Creation error:', error);
-        throw error;
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to create item');
       }
+
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
@@ -88,6 +87,7 @@ export function FileExplorer({ onFileSelect }: Props) {
       });
       setNewItemName('');
       setSelectedFolder(null);
+      setIsCreatingFile(false);
     },
     onError: (error: Error) => {
       toast({
@@ -160,26 +160,45 @@ export function FileExplorer({ onFileSelect }: Props) {
     setExpandedFolders(newExpanded);
   };
 
-  const handleFileCreate = async (parentId: string | null = null) => {
+    const handleFileCreate = async (parentId: string | null = null) => {
     if (!newItemName) return;
 
     const path = parentId ? `${parentId}/${newItemName}` : newItemName;
+    const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
+    const contractName = fileName.replace('.sol', '');
+
     const sourceCode = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract ${newItemName.replace('.sol', '')} {
-    // Your contract code here
+contract ${contractName} {
+    string public message;
+
+    constructor() {
+        message = "Hello, Blockchain!";
+    }
+
+    function setMessage(string memory newMessage) public {
+        message = newMessage;
+    }
+
+    function getMessage() public view returns (string memory) {
+        return message;
+    }
 }`;
 
-    await createMutation.mutateAsync({
-      name: newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`,
-      type: 'file',
-      path,
-      parentId: parentId ? parseInt(parentId) : null,
-      sourceCode,
-    });
-    
+    try {
+      await createMutation.mutateAsync({
+        name: fileName,
+        type: 'file',
+        path,
+        parentId: parentId ? parseInt(parentId) : null,
+        sourceCode,
+      });
+    } catch (error) {
+      console.error('Error creating file:', error);
+    }
   };
+
 
   const handleFolderCreate = async (parentId: string | null = null) => {
     if (!newItemName) return;
@@ -236,6 +255,10 @@ contract ${newItemName.replace('.sol', '')} {
                   toggleFolder(item.id.toString());
                 } else if (item.sourceCode) {
                   onFileSelect(item.sourceCode);
+                  toast({
+                    title: "File loaded",
+                    description: `Loaded ${item.name} into editor`,
+                  });
                 }
               }}
             >
@@ -295,12 +318,25 @@ contract ${newItemName.replace('.sol', '')} {
     );
   };
 
+  // Render loading state
+  if (isLoading) {
+    return (
+      <div className="w-64 border-r h-full bg-muted/30 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+
   return (
     <div className="w-64 border-r h-full bg-muted/30">
       <div className="p-4 border-b bg-background">
-        <Dialog open={selectedFolder !== null} onOpenChange={() => setSelectedFolder(null)}>
+        <Dialog open={selectedFolder !== null} onOpenChange={() => {
+          setSelectedFolder(null);
+          setNewItemName('');
+        }}>
           <Button variant="outline" size="sm" className="w-full" onClick={() => {
-            setSelectedFolder('1'); // Default to root contracts folder
+            setSelectedFolder('1');
             setIsCreatingFile(true);
           }}>
             <Plus className="h-4 w-4 mr-2" />
@@ -312,9 +348,18 @@ contract ${newItemName.replace('.sol', '')} {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <Input
-                placeholder={isCreatingFile ? "Contract.sol" : "New Folder"}
+                placeholder={isCreatingFile ? "MyContract.sol" : "New Folder"}
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
+                 onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (isCreatingFile) {
+                      handleFileCreate(selectedFolder);
+                    } else {
+                      handleFolderCreate(selectedFolder);
+                    }
+                  }
+                }}
               />
               <Button 
                 className="w-full"
