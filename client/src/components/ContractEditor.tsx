@@ -2,18 +2,62 @@ import { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Card } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
+  contractId?: number;
 }
 
-export function ContractEditor({ value, onChange }: Props) {
+export function ContractEditor({ value, onChange, contractId }: Props) {
   const [mounted, setMounted] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout>();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Save contract with debounce
+  useEffect(() => {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+
+    const timeout = setTimeout(async () => {
+      try {
+        if (!value.trim()) return;
+
+        if (contractId) {
+          await apiRequest('PATCH', `/api/contracts/${contractId}`, {
+            sourceCode: value,
+          });
+        } else {
+          await apiRequest('POST', '/api/contracts', {
+            name: 'New Contract',
+            sourceCode: value,
+          });
+        }
+        await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Failed to save contract",
+          description: err instanceof Error ? err.message : "An error occurred while saving",
+        });
+      }
+    }, 1000); // Save after 1 second of no typing
+
+    setSaveTimeout(timeout);
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [value, contractId]);
 
   const handleEditorWillMount = (monaco: any) => {
     // Register Solidity language

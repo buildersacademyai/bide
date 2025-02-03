@@ -76,6 +76,7 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
       errors: output.errors
     };
   } catch (error) {
+    console.error('Compilation error:', error);
     throw new Error(`Compilation failed: ${error}`);
   }
 }

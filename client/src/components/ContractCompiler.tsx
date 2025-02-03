@@ -26,12 +26,18 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
     setError(null);
 
     try {
+      // First, compile the contract
       const result = await compileSolidity(sourceCode);
 
-      // Check for compilation errors
-      if (result.errors?.some(e => e.severity === 'error')) {
-        setError(result.errors.map(e => e.formattedMessage).join('\n'));
-        return;
+      if (result.errors?.length) {
+        const errorMessages = result.errors
+          .filter((e: any) => e.severity === 'error')
+          .map((e: any) => e.formattedMessage);
+
+        if (errorMessages.length > 0) {
+          setError(errorMessages.join('\n'));
+          return;
+        }
       }
 
       if (!result.abi || !result.bytecode) {
@@ -39,25 +45,20 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
         return;
       }
 
-      // Save compilation result to database
-      try {
-        await apiRequest('POST', '/api/contracts', {
-          name: 'New Contract',
-          sourceCode,
-          abi: result.abi,
-          bytecode: result.bytecode
-        });
+      // Call success callback with compilation results
+      onCompileSuccess(result.abi, result.bytecode);
 
-        // Invalidate contracts query to refresh the list
-        await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      // Update the contract in the database with compilation results
+      await apiRequest('POST', '/api/contracts', {
+        sourceCode,
+        abi: result.abi,
+        bytecode: result.bytecode
+      });
 
-        // Call success callback
-        onCompileSuccess(result.abi, result.bytecode);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to save contract');
-        return;
-      }
+      // Refresh the contracts list
+      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
     } catch (err) {
+      console.error('Compilation error:', err);
       setError(err instanceof Error ? err.message : 'Compilation failed');
     } finally {
       setCompiling(false);
@@ -78,7 +79,7 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="whitespace-pre-wrap font-mono text-sm">
+          <AlertDescription className="whitespace-pre-wrap font-mono text-sm mt-2">
             {error}
           </AlertDescription>
         </Alert>
