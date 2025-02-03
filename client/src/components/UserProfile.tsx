@@ -18,7 +18,7 @@ export function UserProfile() {
 
   const { data: contracts, isLoading } = useQuery<any>({ 
     queryKey: ['/api/contracts'],
-    enabled: isOpen, // Only fetch when dropdown is open
+    enabled: isOpen // Only fetch when dropdown is open
   });
 
   const handleLogout = async () => {
@@ -28,7 +28,7 @@ export function UserProfile() {
 
   const { data: account } = useQuery({ 
     queryKey: ['wallet'],
-    queryFn: getConnectedAccount,
+    queryFn: getConnectedAccount
   });
 
   if (!account) return null;
