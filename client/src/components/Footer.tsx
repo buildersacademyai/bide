@@ -53,9 +53,7 @@ export function Footer() {
               <span className="sr-only">GitHub</span>
             </Button>
           </div>
-
         </div>
-
       </div>
       <p className="text-center text-sm text-muted-foreground mt-4">
         © {new Date().getFullYear()} Builders Academy. All rights reserved.
