@@ -35,6 +35,7 @@ interface Contract {
   path: string;
   parentId: number | null;
   sourceCode?: string;
+  bytecode?: string;
 }
 
 interface Props {
@@ -51,9 +52,11 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [itemToDelete, setItemToDelete] = useState<Contract | null>(null);
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
 
-  // Fetch contracts with proper error handling
   const { data: contracts = [], isLoading } = useQuery<Contract[]>({
     queryKey: ['/api/contracts'],
+    select: (data) => data.filter(contract => 
+      contract.type === 'folder' || (contract.type === 'file' && !contract.bytecode)
+    ),
     onError: (error) => {
       toast({
         variant: "destructive",
@@ -63,7 +66,6 @@ export function FileExplorer({ onFileSelect }: Props) {
     },
   });
 
-  // Create contract mutation
   const createMutation = useMutation({
     mutationFn: async (newContract: Partial<Contract>) => {
       const res = await fetch('/api/contracts', {
@@ -98,7 +100,6 @@ export function FileExplorer({ onFileSelect }: Props) {
     },
   });
 
-  // Update contract mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<Contract> }) => {
       const res = await fetch(`/api/contracts/${id}`, {
@@ -125,7 +126,6 @@ export function FileExplorer({ onFileSelect }: Props) {
     },
   });
 
-  // Delete contract mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/contracts/${id}`, {
@@ -318,7 +318,6 @@ contract ${contractName} {
     );
   };
 
-  // Render loading state
   if (isLoading) {
     return (
       <div className="w-64 border-r h-full bg-muted/30 flex items-center justify-center">
@@ -377,7 +376,6 @@ contract ${contractName} {
           </DialogContent>
         </Dialog>
 
-        {/* Rename Dialog */}
         <Dialog 
           open={itemToRename !== null} 
           onOpenChange={(open) => !open && setItemToRename(null)}
@@ -398,7 +396,6 @@ contract ${contractName} {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation Dialog */}
         <AlertDialog 
           open={itemToDelete !== null}
           onOpenChange={(open) => !open && setItemToDelete(null)}

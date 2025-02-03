@@ -11,6 +11,7 @@ import { Loader2, Code2, Rocket, Terminal } from 'lucide-react';
 import { CompilationResults } from '@/components/CompilationResults';
 import { DeployedContracts } from '@/components/DeployedContracts';
 import { ContractCompiler } from '@/components/ContractCompiler';
+import { ContractDeployer } from '@/components/ContractDeployer';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -144,19 +145,17 @@ export default function Editor() {
           <TabsContent value="deploy" className="mt-6">
             <Card className="p-6">
               <div className="space-y-6">
-                <div>
-                  <h2 className="text-xl font-semibold mb-4">Deploy Contract</h2>
-                  <p className="text-muted-foreground mb-4">
-                    Deploy your compiled smart contract to Ethereum testnet.
-                  </p>
-                  <Button 
-                    className="w-full gap-2" 
-                    disabled={!compiledContract || !account}
-                  >
-                    <Rocket className="w-4 h-4" />
-                    Deploy Contract
-                  </Button>
-                </div>
+                {compiledContract && currentContractId ? (
+                  <ContractDeployer
+                    contractId={currentContractId}
+                    abi={compiledContract.abi}
+                    bytecode={compiledContract.bytecode}
+                  />
+                ) : (
+                  <div className="text-center p-6 text-muted-foreground">
+                    Compile a contract first to enable deployment
+                  </div>
+                )}
 
                 <div className="mt-8">
                   <h3 className="text-lg font-semibold mb-4">Deployed Contracts</h3>
