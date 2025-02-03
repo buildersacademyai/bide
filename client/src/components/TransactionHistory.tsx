@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
-import { Card } from '@/components/ui/card';
+import { ethers, type TransactionResponse, type Block } from 'ethers';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,7 +38,7 @@ export function TransactionHistory({ address }: Props) {
 
         const txPromises = [];
         for (let i = currentBlock; i >= lastBlock; i--) {
-          txPromises.push(provider.getBlock(i, true));
+          txPromises.push(provider.getBlock(i));
         }
 
         const blocks = await Promise.all(txPromises);
@@ -48,12 +47,21 @@ export function TransactionHistory({ address }: Props) {
         for (const block of blocks) {
           if (!block || !block.transactions) continue;
 
-          const txs = block.transactions.filter(tx => 
-            tx.from.toLowerCase() === address.toLowerCase() || 
-            (tx.to && tx.to.toLowerCase() === address.toLowerCase())
+          // Get full transaction objects for each hash
+          const txResponses = await Promise.all(
+            block.transactions.map(txHash => 
+              provider.getTransaction(txHash)
+            )
           );
 
-          for (const tx of txs) {
+          const relevantTxs = txResponses.filter((tx): tx is TransactionResponse => 
+            tx !== null && (
+              tx.from.toLowerCase() === address.toLowerCase() || 
+              (tx.to && tx.to.toLowerCase() === address.toLowerCase())
+            )
+          );
+
+          for (const tx of relevantTxs) {
             formattedTransactions.push({
               hash: tx.hash,
               from: tx.from,
@@ -83,39 +91,33 @@ export function TransactionHistory({ address }: Props) {
 
   if (!address) {
     return (
-      <Card className="p-6">
-        <div className="text-center text-muted-foreground">
-          Connect your wallet to view transaction history
-        </div>
-      </Card>
+      <div className="text-center text-muted-foreground">
+        Connect your wallet to view transaction history
+      </div>
     );
   }
 
   if (isLoading) {
     return (
-      <Card className="p-6">
-        <div className="flex items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
-      </Card>
+      <div className="flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Card className="p-6">
-        <div className="text-center text-destructive">
-          {error}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => window.location.reload()}
-            className="mt-2"
-          >
-            Retry
-          </Button>
-        </div>
-      </Card>
+      <div className="text-center text-destructive">
+        {error}
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => window.location.reload()}
+          className="mt-2"
+        >
+          Retry
+        </Button>
+      </div>
     );
   }
 
