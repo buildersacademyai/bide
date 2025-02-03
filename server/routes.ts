@@ -207,17 +207,6 @@ export function registerRoutes(app: Express): Server {
         await db.delete(contracts).where(eq(contracts.id, child.id));
       }
 
-      // Delete any compiled versions of this contract
-      if (contractToDelete.sourceCode) {
-        await db.delete(contracts)
-          .where(
-            and(
-              eq(contracts.name, contractToDelete.name),
-              eq(contracts.bytecode, contractToDelete.bytecode ?? '')
-            )
-          );
-      }
-
       // Then delete the contract itself
       const [deletedContract] = await db.delete(contracts)
         .where(eq(contracts.id, parseInt(req.params.id)))
