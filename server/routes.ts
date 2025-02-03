@@ -9,7 +9,7 @@ export function registerRoutes(app: Express): Server {
   // Contract CRUD operations
   app.post("/api/compile", async (req, res) => {
     try {
-      const sourceCode = req.body.sourceCode;
+      const { sourceCode, contractId } = req.body;
 
       if (!sourceCode) {
         return res.status(400).json({ message: "Source code is required" });
@@ -41,17 +41,32 @@ export function registerRoutes(app: Express): Server {
       // Get the compiled contract
       const contract = output.contracts['Contract.sol'][contractName];
 
-      // Save to database
-      const [savedContract] = await db.insert(contracts)
-        .values({
-          name: contractName,
-          sourceCode: sourceCode,
-          abi: contract.abi,
-          bytecode: contract.evm.bytecode.object,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
-        .returning();
+      let savedContract;
+
+      if (contractId) {
+        // Update existing contract
+        [savedContract] = await db.update(contracts)
+          .set({
+            sourceCode: sourceCode,
+            abi: contract.abi,
+            bytecode: contract.evm.bytecode.object,
+            updatedAt: new Date()
+          })
+          .where(eq(contracts.id, contractId))
+          .returning();
+      } else {
+        // Create new contract
+        [savedContract] = await db.insert(contracts)
+          .values({
+            name: contractName,
+            sourceCode: sourceCode,
+            abi: contract.abi,
+            bytecode: contract.evm.bytecode.object,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          })
+          .returning();
+      }
 
       res.json({
         abi: contract.abi,
