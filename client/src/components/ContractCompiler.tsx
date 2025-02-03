@@ -46,7 +46,10 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
       const response = await fetch('/api/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceCode })
+        body: JSON.stringify({ 
+          sourceCode,
+          contractId 
+        })
       });
 
       const data = await response.json();
