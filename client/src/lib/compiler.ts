@@ -61,29 +61,20 @@ async function loadSolcJs() {
     const script = document.createElement('script');
     script.src = `https://binaries.soliditylang.org/bin/soljson-${SOLC_VERSION}.js`;
     script.onload = () => {
-      const solc = (window as any).Module;
-
       // Wait for the Module to be fully initialized
-      if (solc.default) {
-        resolve(solc.default);
-      } else {
-        const checkInterval = setInterval(() => {
-          if (solc.default) {
-            clearInterval(checkInterval);
-            resolve(solc.default);
-          }
-        }, 50);
-      }
+      const checkForModule = () => {
+        if ((window as any).Module && (window as any).Module.cwrap) {
+          const solc = (window as any).Module;
+          resolve(solc);
+        } else {
+          setTimeout(checkForModule, 100);
+        }
+      };
+      checkForModule();
     };
     script.onerror = () => reject(new Error('Failed to load Solidity compiler'));
     document.head.appendChild(script);
   });
 
   return solcjs;
-}
-
-export interface CompileResult {
-  abi: any[];
-  bytecode: string;
-  errors?: any[];
 }
