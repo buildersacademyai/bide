@@ -9,7 +9,7 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
     }
 
     // Load browser version of solc
-    const solc = await loadBrowserSolc();
+    const wrapper = await loadBrowserSolc();
 
     const input = {
       language: 'Solidity',
@@ -27,7 +27,7 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
       }
     };
 
-    const output = JSON.parse(solc.compile(JSON.stringify(input)));
+    const output = JSON.parse(wrapper(JSON.stringify(input)));
 
     if (output.errors?.length) {
       const errors = output.errors
@@ -61,11 +61,31 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
 function loadBrowserSolc(): Promise<any> {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'https://binaries.soliditylang.org/bin/soljson-v0.8.19+commit.7dd6d404.js';
+    script.src = `https://binaries.soliditylang.org/bin/soljson-${SOLC_VERSION}.js`;
+    script.async = true;
     script.onload = () => {
       // @ts-ignore
-      const solc = window.Module;
-      resolve(solc);
+      if (!window.Module) {
+        reject(new Error('Failed to load Solidity compiler module'));
+        return;
+      }
+
+      // Wait for module initialization
+      const checkInterval = setInterval(() => {
+        // @ts-ignore
+        if (window.Module.cwrap) {
+          clearInterval(checkInterval);
+          // @ts-ignore
+          const solidity_compile = window.Module.cwrap('compileStandard', 'string', ['string']);
+          resolve(solidity_compile);
+        }
+      }, 100);
+
+      // Set timeout for initialization
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        reject(new Error('Timeout waiting for Solidity compiler initialization'));
+      }, 5000);
     };
     script.onerror = () => reject(new Error('Failed to load Solidity compiler'));
     document.head.appendChild(script);
