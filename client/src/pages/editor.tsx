@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { connectWallet, getConnectedAccount, deployContract } from '@/lib/web3';
 import { ContractEditor } from '@/components/ContractEditor';
@@ -38,7 +38,24 @@ export default function Editor() {
     abi: any[];
     bytecode: string;
   } | null>(null);
-  const [isDeploying, setIsDeploying] = useState(false);
+
+  // Query current contract data if it exists
+  const { data: currentContract } = useQuery({
+    queryKey: ['/api/contracts', currentContractId],
+    enabled: !!currentContractId,
+  });
+
+  useEffect(() => {
+    // If contract is already compiled, set the compilation state
+    if (currentContract?.abi && currentContract?.bytecode) {
+      setCompiledContract({
+        abi: currentContract.abi,
+        bytecode: currentContract.bytecode,
+      });
+    } else {
+      setCompiledContract(null);
+    }
+  }, [currentContract]);
 
   const { data: account, isLoading: isWalletLoading } = useQuery({ 
     queryKey: ['wallet'],
@@ -49,7 +66,7 @@ export default function Editor() {
   const handleFileSelect = (content: string, contractId: number) => {
     setSourceCode(content);
     setCurrentContractId(contractId);
-    setCompiledContract(null);
+    // Don't reset compiledContract here as it may be already compiled
   };
 
   const handleCompileSuccess = (abi: any[], bytecode: string) => {
@@ -71,53 +88,6 @@ export default function Editor() {
         title: "Connection failed",
         description: err instanceof Error ? err.message : "Failed to connect wallet",
       });
-    }
-  };
-
-  const handleDeploy = async () => {
-    if (!compiledContract || !currentContractId || !account) return;
-
-    setIsDeploying(true);
-    try {
-      toast({
-        title: "Deploying contract",
-        description: "Please confirm the transaction in MetaMask...",
-      });
-
-      const address = await deployContract(compiledContract.abi, compiledContract.bytecode);
-
-      // Update contract in database with deployment info
-      const response = await fetch(`/api/contracts/${currentContractId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address,
-          network: 'sepolia',
-          abi: compiledContract.abi,
-          bytecode: compiledContract.bytecode,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update contract deployment info');
-      }
-
-      // Refresh contracts list
-      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
-
-      toast({
-        title: "Contract deployed",
-        description: `Successfully deployed to ${address}`,
-      });
-    } catch (err) {
-      console.error('Deployment error:', err);
-      toast({
-        variant: "destructive",
-        title: "Deployment failed",
-        description: err instanceof Error ? err.message : "Failed to deploy contract",
-      });
-    } finally {
-      setIsDeploying(false);
     }
   };
 
@@ -180,6 +150,7 @@ export default function Editor() {
                 contractId={currentContractId}
                 onCompileSuccess={handleCompileSuccess}
               />
+              {/* Show deploy button if contract is compiled and wallet is connected */}
               {compiledContract && account && (
                 <ContractDeployer
                   contractId={currentContractId!}
