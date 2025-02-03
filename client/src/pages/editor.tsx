@@ -8,6 +8,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Loader2, Code2, Rocket, Terminal } from 'lucide-react';
+import { CompilationResults } from '@/components/CompilationResults';
+import { DeployedContracts } from '@/components/DeployedContracts';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -106,27 +108,45 @@ export default function Editor() {
 
           <TabsContent value="compile" className="mt-6">
             <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Compile Contract</h2>
-              <p className="text-muted-foreground mb-4">
-                Compile your Solidity smart contract to generate ABI and bytecode.
-              </p>
-              <Button disabled className="w-full gap-2">
-                <Terminal className="w-4 h-4" />
-                Coming Soon
-              </Button>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-semibold mb-4">Compile Contract</h2>
+                  <p className="text-muted-foreground mb-4">
+                    Compile your Solidity smart contract to generate ABI and bytecode.
+                  </p>
+                  <Button className="w-full gap-2">
+                    <Terminal className="w-4 h-4" />
+                    Compile Contract
+                  </Button>
+                </div>
+
+                <div className="mt-8">
+                  <h3 className="text-lg font-semibold mb-4">Compilation Results</h3>
+                  <CompilationResults />
+                </div>
+              </div>
             </Card>
           </TabsContent>
 
           <TabsContent value="deploy" className="mt-6">
             <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Deploy Contract</h2>
-              <p className="text-muted-foreground mb-4">
-                Deploy your compiled smart contract to Ethereum testnet.
-              </p>
-              <Button disabled className="w-full gap-2">
-                <Rocket className="w-4 h-4" />
-                Coming Soon
-              </Button>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-semibold mb-4">Deploy Contract</h2>
+                  <p className="text-muted-foreground mb-4">
+                    Deploy your compiled smart contract to Ethereum testnet.
+                  </p>
+                  <Button className="w-full gap-2">
+                    <Rocket className="w-4 h-4" />
+                    Deploy Contract
+                  </Button>
+                </div>
+
+                <div className="mt-8">
+                  <h3 className="text-lg font-semibold mb-4">Deployed Contracts</h3>
+                  <DeployedContracts />
+                </div>
+              </div>
             </Card>
           </TabsContent>
         </Tabs>
