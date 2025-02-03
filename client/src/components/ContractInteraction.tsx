@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { getContract } from '@/lib/web3';
+import { ethers } from 'ethers';
 import { Loader2 } from 'lucide-react';
 
 interface Props {
@@ -18,10 +18,37 @@ export function ContractInteraction({ address, abi }: Props) {
   const handleCall = async (functionName: string, inputs: any[]) => {
     setLoading(prev => ({ ...prev, [functionName]: true }));
     try {
-      const contract = await getContract(address, abi);
-      const result = await contract[functionName](...inputs);
-      setResults(prev => ({ ...prev, [functionName]: result.toString() }));
+      if (!window.ethereum) {
+        throw new Error('MetaMask is not installed');
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(address, abi, signer);
+
+      // Convert input values based on parameter types
+      const functionAbi = abi.find(item => item.name === functionName);
+      const convertedInputs = inputs.map((value, index) => {
+        const type = functionAbi?.inputs[index].type;
+        if (type?.startsWith('uint')) {
+          return ethers.parseUnits(value || '0', 0);
+        }
+        return value;
+      });
+
+      const result = await contract[functionName](...convertedInputs);
+
+      // Handle different types of return values
+      let displayResult = result;
+      if (ethers.isAddress(result)) {
+        displayResult = result;
+      } else if (typeof result === 'bigint') {
+        displayResult = result.toString();
+      }
+
+      setResults(prev => ({ ...prev, [functionName]: displayResult }));
     } catch (err) {
+      console.error('Contract call error:', err);
       setResults(prev => ({ 
         ...prev, 
         [functionName]: err instanceof Error ? err.message : 'Call failed' 
@@ -76,11 +103,25 @@ export function ContractInteraction({ address, abi }: Props) {
     );
   };
 
+  if (!address) {
+    return (
+      <div className="text-center text-muted-foreground">
+        Please deploy a contract first
+      </div>
+    );
+  }
+
   return (
-    <Card className="p-4">
+    <div>
       <h2 className="text-xl font-bold mb-4">Contract Interaction</h2>
+      <div className="mb-4">
+        <Label>Contract Address</Label>
+        <code className="block p-2 bg-muted rounded-md font-mono text-sm mt-1">
+          {address}
+        </code>
+      </div>
       {abi.filter((func: any) => func.type === 'function')
          .map(renderFunctionForm)}
-    </Card>
+    </div>
   );
 }
