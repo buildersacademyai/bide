@@ -40,9 +40,10 @@ interface Contract {
 
 interface Props {
   onFileSelect: (content: string, contractId: number) => void;
+  onFileDelete?: (contractId: number) => void;
 }
 
-export function FileExplorer({ onFileSelect }: Props) {
+export function FileExplorer({ onFileSelect, onFileDelete }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['1']));
@@ -218,6 +219,9 @@ contract ${contractName} {
   const handleDelete = async () => {
     if (!itemToDelete) return;
     await deleteMutation.mutateAsync(itemToDelete.id);
+    if (itemToDelete.type === 'file' && onFileDelete) {
+      onFileDelete(itemToDelete.id);
+    }
     setItemToDelete(null);
   };
 

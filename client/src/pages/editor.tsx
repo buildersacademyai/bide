@@ -39,14 +39,12 @@ export default function Editor() {
     bytecode: string;
   } | null>(null);
 
-  // Query current contract data if it exists
   const { data: currentContract } = useQuery({
     queryKey: ['/api/contracts', currentContractId],
     enabled: !!currentContractId,
   });
 
   useEffect(() => {
-    // If contract is already compiled, set the compilation state
     if (currentContract?.abi && currentContract?.bytecode) {
       setCompiledContract({
         abi: currentContract.abi,
@@ -66,7 +64,18 @@ export default function Editor() {
   const handleFileSelect = (content: string, contractId: number) => {
     setSourceCode(content);
     setCurrentContractId(contractId);
-    // Don't reset compiledContract here as it may be already compiled
+  };
+
+  const handleFileDelete = (deletedContractId: number) => {
+    if (deletedContractId === currentContractId) {
+      setSourceCode(DEFAULT_CONTRACT);
+      setCurrentContractId(undefined);
+      setCompiledContract(null);
+      toast({
+        title: "Contract deleted",
+        description: "The current contract was deleted. Editor has been reset.",
+      });
+    }
   };
 
   const handleCompileSuccess = (abi: any[], bytecode: string) => {
@@ -93,7 +102,10 @@ export default function Editor() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
-      <FileExplorer onFileSelect={handleFileSelect} />
+      <FileExplorer 
+        onFileSelect={handleFileSelect} 
+        onFileDelete={handleFileDelete}
+      />
 
       <div className="flex-1 p-4 space-y-8 overflow-y-auto">
         <div className="flex justify-between items-center">
@@ -150,7 +162,6 @@ export default function Editor() {
                 contractId={currentContractId}
                 onCompileSuccess={handleCompileSuccess}
               />
-              {/* Show deploy button if contract is compiled and wallet is connected */}
               {compiledContract && account && (
                 <ContractDeployer
                   contractId={currentContractId!}
