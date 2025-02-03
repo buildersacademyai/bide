@@ -20,13 +20,32 @@ export function registerRoutes(app: Express): Server {
         updatedAt: new Date()
       };
 
-      console.log('Creating contract with data:', newContract);
+      // Check if we need to create root folder first
+      if (newContract.parentId) {
+        const parentFolder = await db.query.contracts.findFirst({
+          where: eq(contracts.id, newContract.parentId),
+        });
+
+        if (!parentFolder) {
+          // Create root folder first
+          const [rootFolder] = await db.insert(contracts).values({
+            name: 'Contracts',
+            type: 'folder',
+            path: '',
+            parentId: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }).returning();
+
+          // Update the parent id to the newly created folder
+          newContract.parentId = rootFolder.id;
+        }
+      }
 
       const [contract] = await db.insert(contracts)
         .values(newContract)
         .returning();
 
-      console.log('Contract created:', contract);
       res.json(contract);
     } catch (err) {
       console.error('Error creating contract:', err);
