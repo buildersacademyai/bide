@@ -38,7 +38,7 @@ interface Contract {
 }
 
 interface Props {
-  onFileSelect: (content: string) => void;
+  onFileSelect: (content: string, contractId: number) => void;
 }
 
 export function FileExplorer({ onFileSelect }: Props) {
@@ -254,7 +254,7 @@ contract ${contractName} {
                 if (item.type === 'folder') {
                   toggleFolder(item.id.toString());
                 } else if (item.sourceCode) {
-                  onFileSelect(item.sourceCode);
+                  onFileSelect(item.sourceCode, item.id);
                   toast({
                     title: "File loaded",
                     description: `Loaded ${item.name} into editor`,

@@ -30,12 +30,18 @@ export default function Editor() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [sourceCode, setSourceCode] = useState(DEFAULT_CONTRACT);
+  const [currentContractId, setCurrentContractId] = useState<number | undefined>();
 
   const { data: account, isLoading: isWalletLoading } = useQuery({ 
     queryKey: ['wallet'],
     queryFn: getConnectedAccount,
     refetchOnWindowFocus: true
   });
+
+  const handleFileSelect = (content: string, contractId: number) => {
+    setSourceCode(content);
+    setCurrentContractId(contractId);
+  };
 
   const handleConnect = async () => {
     try {
@@ -56,7 +62,7 @@ export default function Editor() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
-      <FileExplorer onFileSelect={setSourceCode} />
+      <FileExplorer onFileSelect={handleFileSelect} />
 
       <div className="flex-1 p-4 space-y-8 overflow-y-auto">
         <div className="flex justify-between items-center">
@@ -101,7 +107,8 @@ export default function Editor() {
             <Card className="p-6">
               <ContractEditor 
                 value={sourceCode} 
-                onChange={setSourceCode} 
+                onChange={setSourceCode}
+                contractId={currentContractId}
               />
             </Card>
           </TabsContent>

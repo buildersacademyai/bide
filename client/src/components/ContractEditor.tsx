@@ -2,18 +2,70 @@ import { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Card } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useMutation } from '@tanstack/react-query';
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
+  contractId?: number;
 }
 
-export function ContractEditor({ value, onChange }: Props) {
+export function ContractEditor({ value, onChange, contractId }: Props) {
+  const { toast } = useToast();
   const [mounted, setMounted] = useState(false);
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Auto-save mutation
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, sourceCode }: { id: number; sourceCode: string }) => {
+      const res = await fetch(`/api/contracts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceCode }),
+      });
+      if (!res.ok) throw new Error('Failed to save changes');
+      return res.json();
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to save",
+        description: error.message,
+      });
+    },
+  });
+
+  // Handle editor changes with debounced auto-save
+  const handleEditorChange = (value: string | undefined) => {
+    const newValue = value || '';
+    onChange(newValue);
+
+    // Only attempt to save if we have a contractId
+    if (contractId) {
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+      }
+
+      const timeout = setTimeout(() => {
+        updateMutation.mutate({
+          id: contractId,
+          sourceCode: newValue,
+        });
+      }, 1000); // Debounce for 1 second
+
+      setSaveTimeout(timeout);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    return () => {
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+      }
+    };
+  }, [saveTimeout]);
 
   const handleEditorWillMount = (monaco: any) => {
     // Register Solidity language
@@ -82,7 +134,7 @@ export function ContractEditor({ value, onChange }: Props) {
         language="sol"
         theme="solidity-dark"
         value={value}
-        onChange={(value) => onChange(value || '')}
+        onChange={handleEditorChange}
         beforeMount={handleEditorWillMount}
         loading={
           <div className="flex items-center justify-center h-[600px] bg-background">
