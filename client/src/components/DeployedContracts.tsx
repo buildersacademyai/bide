@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 
@@ -34,6 +34,13 @@ export function DeployedContracts() {
     }, 2000);
   };
 
+  const getExplorerUrl = (address: string, network: string) => {
+    const baseUrl = network === 'sepolia' 
+      ? 'https://sepolia.etherscan.io/address/'
+      : 'https://goerli.etherscan.io/address/';
+    return `${baseUrl}${address}`;
+  };
+
   if (contracts.length === 0) {
     return (
       <Card className="p-6">
@@ -50,18 +57,25 @@ export function DeployedContracts() {
             <TableHead>Contract Name</TableHead>
             <TableHead>Network</TableHead>
             <TableHead>Address</TableHead>
+            <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {contracts.map((contract) => (
             <TableRow key={contract.id}>
               <TableCell className="font-medium">{contract.name}</TableCell>
-              <TableCell>{contract.network}</TableCell>
+              <TableCell>
+                <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-800">
+                  {contract.network}
+                </span>
+              </TableCell>
+              <TableCell>
+                <code className="px-2 py-1 bg-muted rounded text-sm">
+                  {contract.address.slice(0, 6)}...{contract.address.slice(-4)}
+                </code>
+              </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
-                  <code className="px-2 py-1 bg-muted rounded text-sm">
-                    {contract.address.slice(0, 6)}...{contract.address.slice(-4)}
-                  </code>
                   <Button
                     variant="outline"
                     size="sm"
@@ -72,6 +86,13 @@ export function DeployedContracts() {
                     ) : (
                       <Copy className="h-4 w-4" />
                     )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(getExplorerUrl(contract.address, contract.network), '_blank')}
+                  >
+                    <ExternalLink className="h-4 w-4" />
                   </Button>
                 </div>
               </TableCell>
