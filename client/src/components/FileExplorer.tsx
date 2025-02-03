@@ -13,9 +13,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Folder, File, ChevronRight, ChevronDown, Plus, FileCode } from 'lucide-react';
+import { Folder, FileCode, ChevronRight, ChevronDown, Plus } from 'lucide-react';
 
 interface FileSystemItem {
   id: string;
@@ -143,7 +142,8 @@ contract ${newItemName.replace('.sol', '')} {
     });
 
     setNewItemName('');
-    setExpandedFolders(prev => new Set([...prev, newFolder.id]));
+    // Convert Set to Array before spreading
+    setExpandedFolders(prev => new Set([...Array.from(prev), newFolder.id]));
   };
 
   const renderItem = (item: FileSystemItem, level: number = 0) => {
@@ -154,8 +154,8 @@ contract ${newItemName.replace('.sol', '')} {
         <ContextMenu>
           <ContextMenuTrigger>
             <div
-              className={`flex items-center px-2 py-1 hover:bg-accent cursor-pointer text-sm`}
-              style={{ paddingLeft: `${level * 12}px` }}
+              className={`flex items-center px-2 py-1 hover:bg-accent cursor-pointer text-sm group rounded-sm`}
+              style={{ paddingLeft: `${level * 12 + 8}px` }}
               onClick={() => {
                 if (item.type === 'folder') {
                   toggleFolder(item.id);
@@ -164,17 +164,17 @@ contract ${newItemName.replace('.sol', '')} {
                 }
               }}
             >
-              {item.type === 'folder' && (
-                <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
-                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                </Button>
+              {item.type === 'folder' ? (
+                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${!isExpanded ? '-rotate-90' : ''}`} />
+              ) : (
+                <div className="w-4" />
               )}
               {item.type === 'folder' ? (
-                <Folder className="h-4 w-4 mr-2 text-yellow-500" />
+                <Folder className="h-4 w-4 ml-1 mr-2 text-yellow-500 shrink-0" />
               ) : (
-                <FileCode className="h-4 w-4 mr-2 text-blue-500" />
+                <FileCode className="h-4 w-4 ml-1 mr-2 text-blue-500 shrink-0" />
               )}
-              <span>{item.name}</span>
+              <span className="truncate">{item.name}</span>
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
@@ -206,15 +206,16 @@ contract ${newItemName.replace('.sol', '')} {
   };
 
   return (
-    <div className="w-64 border-r h-full">
-      <div className="p-4 border-b">
+    <div className="w-64 border-r h-full bg-muted/30">
+      <div className="p-4 border-b bg-background">
         <Dialog open={selectedFolder !== null} onOpenChange={() => setSelectedFolder(null)}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="w-full">
-              <Plus className="h-4 w-4 mr-2" />
-              New {isCreatingFile ? 'File' : 'Folder'}
-            </Button>
-          </DialogTrigger>
+          <Button variant="outline" size="sm" className="w-full" onClick={() => {
+            setSelectedFolder('1'); // Default to root contracts folder
+            setIsCreatingFile(true);
+          }}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Contract
+          </Button>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New {isCreatingFile ? 'File' : 'Folder'}</DialogTitle>
