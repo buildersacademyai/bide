@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Loader2, Code2, Rocket, Terminal } from 'lucide-react';
 import { CompilationResults } from '@/components/CompilationResults';
 import { DeployedContracts } from '@/components/DeployedContracts';
+import { ContractCompiler } from '@/components/ContractCompiler';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -31,6 +32,8 @@ export default function Editor() {
   const queryClient = useQueryClient();
   const [sourceCode, setSourceCode] = useState(DEFAULT_CONTRACT);
   const [currentContractId, setCurrentContractId] = useState<number | undefined>();
+  const [compiledAbi, setCompiledAbi] = useState<any[]>([]);
+  const [compiledBytecode, setCompiledBytecode] = useState('');
 
   const { data: account, isLoading: isWalletLoading } = useQuery({ 
     queryKey: ['wallet'],
@@ -41,6 +44,11 @@ export default function Editor() {
   const handleFileSelect = (content: string, contractId: number) => {
     setSourceCode(content);
     setCurrentContractId(contractId);
+  };
+
+  const handleCompileSuccess = (abi: any[], bytecode: string) => {
+    setCompiledAbi(abi);
+    setCompiledBytecode(bytecode);
   };
 
   const handleConnect = async () => {
@@ -103,7 +111,7 @@ export default function Editor() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="editor" className="mt-6">
+          <TabsContent value="editor" className="mt-6 space-y-4">
             <Card className="p-6">
               <ContractEditor 
                 value={sourceCode} 
@@ -111,24 +119,17 @@ export default function Editor() {
                 contractId={currentContractId}
               />
             </Card>
+            <ContractCompiler 
+              sourceCode={sourceCode} 
+              onCompileSuccess={handleCompileSuccess}
+            />
           </TabsContent>
 
           <TabsContent value="compile" className="mt-6">
             <Card className="p-6">
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-xl font-semibold mb-4">Compile Contract</h2>
-                  <p className="text-muted-foreground mb-4">
-                    Compile your Solidity smart contract to generate ABI and bytecode.
-                  </p>
-                  <Button className="w-full gap-2">
-                    <Terminal className="w-4 h-4" />
-                    Compile Contract
-                  </Button>
-                </div>
-
-                <div className="mt-8">
-                  <h3 className="text-lg font-semibold mb-4">Compilation Results</h3>
+                  <h2 className="text-xl font-semibold mb-4">Compilation Results</h2>
                   <CompilationResults />
                 </div>
               </div>
