@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, Terminal } from 'lucide-react';
 import { compileSolidity } from '@/lib/compiler';
 import { apiRequest } from '@/lib/queryClient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,10 +14,10 @@ interface Props {
 }
 
 export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
+  const { toast } = useToast();
   const [compiling, setCompiling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const handleCompile = async () => {
     if (!sourceCode.trim()) {
@@ -29,23 +29,27 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
     setError(null);
 
     try {
+      // Extract contract name from source code
+      const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
+      if (!contractNameMatch) {
+        throw new Error('Could not find contract name in source code');
+      }
+      const contractName = contractNameMatch[1];
+
       // Compile the contract
       const result = await compileSolidity(sourceCode);
 
+      // Handle compilation errors
       if (result.errors?.length) {
         const errorMessages = result.errors
-          .filter((e: any) => e.severity === 'error')
-          .map((e: any) => e.formattedMessage);
+          .filter(e => e.severity === 'error')
+          .map(e => e.formattedMessage);
 
         if (errorMessages.length > 0) {
           setError(errorMessages.join('\n'));
-          return;
+          throw new Error('Compilation failed with errors');
         }
       }
-
-      // Extract contract name from source code
-      const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
-      const contractName = contractNameMatch ? contractNameMatch[1] : 'New Contract';
 
       // Save compilation result to database
       await apiRequest('POST', '/api/contracts', {
@@ -61,14 +65,16 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       // Show success message
       toast({
         title: "Compilation successful",
-        description: "Contract compiled and saved successfully",
+        description: `Contract ${contractName} compiled and saved successfully`,
       });
 
       // Call success callback
       onCompileSuccess(result.abi, result.bytecode);
     } catch (err) {
       console.error('Compilation error:', err);
-      setError(err instanceof Error ? err.message : 'Compilation failed');
+      if (!error) { // Only set error if not already set from compilation errors
+        setError(err instanceof Error ? err.message : 'Compilation failed');
+      }
 
       toast({
         variant: "destructive",
@@ -85,18 +91,15 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       <div className="flex gap-2">
         <Button 
           onClick={handleCompile} 
-          disabled={compiling}
+          disabled={compiling || !sourceCode.trim()}
           className="flex-1"
         >
-          {compiling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {compiling ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Terminal className="mr-2 h-4 w-4" />
+          )}
           Compile Contract
-        </Button>
-        <Button 
-          variant="secondary" 
-          className="flex-1"
-          disabled={!sourceCode.trim() || compiling}
-        >
-          Deploy Contract
         </Button>
       </div>
 
