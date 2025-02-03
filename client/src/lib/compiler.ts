@@ -67,8 +67,8 @@ function loadBrowserSolc(): Promise<any> {
 
     script.onload = () => {
       let attempts = 0;
-      const maxAttempts = 100; // Increased timeout duration
-      const checkInterval = 100; // Checking more frequently
+      const maxAttempts = 100; // 10 seconds total
+      const interval = 100; // Check every 100ms
 
       const timer = setInterval(() => {
         attempts++;
@@ -89,7 +89,7 @@ function loadBrowserSolc(): Promise<any> {
             reject(new Error('Error initializing Solidity compiler'));
           }
         }
-      }, checkInterval);
+      }, interval);
     };
 
     script.onerror = () => {
@@ -97,7 +97,16 @@ function loadBrowserSolc(): Promise<any> {
       reject(new Error('Failed to load Solidity compiler script'));
     };
 
+    // Add script to document and handle load timeout
     document.head.appendChild(script);
+
+    // Set a timeout for the entire loading process
+    setTimeout(() => {
+      if (solcPromise) {
+        solcPromise = null;
+        reject(new Error('Timeout loading Solidity compiler'));
+      }
+    }, 15000); // 15 second total timeout
   });
 
   return solcPromise;
