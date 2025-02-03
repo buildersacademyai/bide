@@ -42,10 +42,10 @@ export function registerRoutes(app: Express): Server {
       const contract = output.contracts['Contract.sol'][contractName];
 
       if (contractId) {
-        // Update existing contract
+        // Update existing contract with new compilation results
         const [updatedContract] = await db.update(contracts)
           .set({
-            sourceCode: sourceCode,
+            sourceCode,
             abi: contract.abi,
             bytecode: contract.evm.bytecode.object,
             updatedAt: new Date()
@@ -63,11 +63,12 @@ export function registerRoutes(app: Express): Server {
           contract: updatedContract
         });
       } else {
-        // Create new contract
+        // Create new contract file entry
         const [savedContract] = await db.insert(contracts)
           .values({
-            name: contractName,
-            sourceCode: sourceCode,
+            name: `${contractName}.sol`,
+            type: 'file',
+            sourceCode,
             abi: contract.abi,
             bytecode: contract.evm.bytecode.object,
             createdAt: new Date(),

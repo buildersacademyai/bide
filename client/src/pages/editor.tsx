@@ -46,10 +46,27 @@ export default function Editor() {
     refetchOnWindowFocus: true
   });
 
-  const handleFileSelect = (content: string, contractId: number) => {
+  const handleFileSelect = async (content: string, contractId: number) => {
     setSourceCode(content);
     setCurrentContractId(contractId);
-    setCompiledContract(null);
+
+    // Check if contract is already compiled
+    try {
+      const response = await fetch(`/api/contracts/${contractId}`);
+      const contract = await response.json();
+
+      if (contract.abi && contract.bytecode) {
+        setCompiledContract({
+          abi: contract.abi,
+          bytecode: contract.bytecode
+        });
+      } else {
+        setCompiledContract(null);
+      }
+    } catch (error) {
+      console.error('Error fetching contract:', error);
+      setCompiledContract(null);
+    }
   };
 
   const handleCompileSuccess = (abi: any[], bytecode: string) => {
