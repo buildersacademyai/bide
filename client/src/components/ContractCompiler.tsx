@@ -29,6 +29,7 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
     setError(null);
 
     try {
+      // Compile the contract
       const result = await compileSolidity(sourceCode);
 
       if (result.errors?.length) {
@@ -42,38 +43,25 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
         }
       }
 
-      if (!result.abi || !result.bytecode) {
-        setError('Compilation failed: Invalid contract output');
-        return;
-      }
+      // Save compilation result to database
+      await apiRequest('POST', '/api/contracts', {
+        name: 'New Contract',
+        sourceCode,
+        abi: result.abi,
+        bytecode: result.bytecode
+      });
 
-      // Update compilation status
-      try {
-        await apiRequest('POST', '/api/contracts', {
-          name: 'New Contract',
-          sourceCode,
-          abi: result.abi,
-          bytecode: result.bytecode
-        });
+      // Refresh the contracts list
+      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
-        // Refresh the contracts list
-        await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      // Show success message
+      toast({
+        title: "Compilation successful",
+        description: "Contract compiled and saved successfully",
+      });
 
-        // Show success message
-        toast({
-          title: "Compilation successful",
-          description: "Contract compiled and saved successfully",
-        });
-
-        // Call success callback
-        onCompileSuccess(result.abi, result.bytecode);
-      } catch (err) {
-        toast({
-          variant: "destructive",
-          title: "Failed to save contract",
-          description: err instanceof Error ? err.message : "Failed to save compilation result",
-        });
-      }
+      // Call success callback
+      onCompileSuccess(result.abi, result.bytecode);
     } catch (err) {
       console.error('Compilation error:', err);
       setError(err instanceof Error ? err.message : 'Compilation failed');

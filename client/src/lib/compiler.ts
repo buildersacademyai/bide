@@ -1,13 +1,15 @@
 import type { CompileResult } from './types';
 
+const SOLC_VERSION = 'v0.8.19+commit.7dd6d404';
+
 export async function compileSolidity(source: string): Promise<CompileResult> {
   try {
     if (!source.trim()) {
       throw new Error('Source code is empty');
     }
 
-    // Using dynamic import for solc-js
-    const solc = await import('solc');
+    // Load browser version of solc
+    const solc = await loadBrowserSolc();
 
     const input = {
       language: 'Solidity',
@@ -54,4 +56,18 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
     console.error('Compilation error:', error);
     throw new Error(`Compilation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+function loadBrowserSolc(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://binaries.soliditylang.org/bin/soljson-v0.8.19+commit.7dd6d404.js';
+    script.onload = () => {
+      // @ts-ignore
+      const solc = window.Module;
+      resolve(solc);
+    };
+    script.onerror = () => reject(new Error('Failed to load Solidity compiler'));
+    document.head.appendChild(script);
+  });
 }
