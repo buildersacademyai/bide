@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { connectWallet } from '@/lib/web3';
 import { ContractEditor } from '@/components/ContractEditor';
 import { ContractCompiler } from '@/components/ContractCompiler';
 import { ContractDeployer } from '@/components/ContractDeployer';
 import { ContractInteraction } from '@/components/ContractInteraction';
+import { UserProfile } from '@/components/UserProfile';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
@@ -73,11 +74,14 @@ export default function Home() {
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Blockchain IDE</h1>
-        <Button onClick={handleConnect} disabled={connected}>
-          {connected ? 'Connected to MetaMask' : 'Connect Wallet'}
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button onClick={handleConnect} disabled={connected}>
+            {connected ? 'Connected to MetaMask' : 'Connect Wallet'}
+          </Button>
+          <UserProfile />
+        </div>
       </div>
-
+      
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
           <ContractEditor value={sourceCode} onChange={setSourceCode} />
