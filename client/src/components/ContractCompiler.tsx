@@ -29,20 +29,35 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
     setError(null);
 
     try {
-      // Compile the contract using browser-based solc
+      // Show loading toast
+      toast({
+        title: "Compiling contract",
+        description: "Please wait while the contract is being compiled...",
+      });
+
       const result = await compileSolidity(sourceCode);
 
       if (result.errors?.length) {
         const errors = result.errors.filter(e => e.severity === 'error');
         if (errors.length > 0) {
           setError(errors.map(e => e.formattedMessage).join('\n'));
+          toast({
+            variant: "destructive",
+            title: "Compilation failed",
+            description: "Contract has compilation errors",
+          });
           return;
         }
       }
 
+      // Extract contract name from source code
+      const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
+      const contractName = contractNameMatch ? contractNameMatch[1] : 'Contract';
+
       // Save compilation result to database
       await apiRequest('POST', '/api/contracts', {
-        name: 'CompiledContract',
+        name: contractName,
+        sourceCode: sourceCode,
         abi: result.abi,
         bytecode: result.bytecode
       });
@@ -53,7 +68,7 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       // Show success message
       toast({
         title: "Compilation successful",
-        description: "Contract compiled and saved successfully",
+        description: `${contractName} compiled successfully`,
       });
 
       // Call success callback with the results
@@ -61,7 +76,6 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
     } catch (err) {
       console.error('Compilation error:', err);
       setError(err instanceof Error ? err.message : 'Compilation failed');
-
       toast({
         variant: "destructive",
         title: "Compilation failed",
@@ -85,7 +99,7 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
           ) : (
             <Terminal className="mr-2 h-4 w-4" />
           )}
-          Compile Contract
+          {compiling ? 'Compiling...' : 'Compile Contract'}
         </Button>
       </div>
 

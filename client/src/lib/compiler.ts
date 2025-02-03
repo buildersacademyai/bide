@@ -66,27 +66,35 @@ function loadBrowserSolc(): Promise<any> {
     script.async = true;
 
     script.onload = () => {
-      // Wait for module initialization
       let attempts = 0;
-      const maxAttempts = 50;
-      const checkInterval = setInterval(() => {
+      const maxAttempts = 100; // Increased timeout duration
+      const checkInterval = 100; // Checking more frequently
+
+      const timer = setInterval(() => {
         attempts++;
-        // @ts-ignore
-        if (window.Module && window.Module.cwrap) {
-          clearInterval(checkInterval);
+        try {
           // @ts-ignore
-          const compile = window.Module.cwrap('compileStandard', 'string', ['string']);
-          resolve(compile);
-        } else if (attempts >= maxAttempts) {
-          clearInterval(checkInterval);
-          reject(new Error('Timeout waiting for Solidity compiler initialization'));
+          if (window.Module) {
+            // @ts-ignore
+            const compile = window.Module.cwrap('compileStandard', 'string', ['string']);
+            clearInterval(timer);
+            resolve(compile);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(timer);
+            reject(new Error('Failed to initialize Solidity compiler'));
+          }
+        } catch (e) {
+          if (attempts >= maxAttempts) {
+            clearInterval(timer);
+            reject(new Error('Error initializing Solidity compiler'));
+          }
         }
-      }, 200);
+      }, checkInterval);
     };
 
     script.onerror = () => {
       solcPromise = null;
-      reject(new Error('Failed to load Solidity compiler'));
+      reject(new Error('Failed to load Solidity compiler script'));
     };
 
     document.head.appendChild(script);
