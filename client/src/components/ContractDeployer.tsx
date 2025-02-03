@@ -84,17 +84,17 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
   };
 
   return (
-    <Card className="p-6">
-      <div className="space-y-4">
-        <div>
+    <Card className="">
+      <div className="">
+        {/* <div>
           <h3 className="text-lg font-semibold mb-2">Deploy Contract</h3>
           <p className="text-muted-foreground mb-4">
             Deploy your compiled contract to the Ethereum testnet.
           </p>
-        </div>
+        </div> */}
 
-        <div className="space-y-4">
-          <div>
+        <div className="">
+          {/* <div>
             <label className="text-sm font-medium mb-2 block">
               Select Network
             </label>
@@ -113,7 +113,7 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div> */}
 
           <Button
             onClick={handleDeploy}

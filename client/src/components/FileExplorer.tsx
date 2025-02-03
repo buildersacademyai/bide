@@ -55,7 +55,8 @@ export function FileExplorer({ onFileSelect }: Props) {
   const { data: contracts = [], isLoading } = useQuery<Contract[]>({
     queryKey: ['/api/contracts'],
     select: (data) => data.filter(contract => 
-      contract.type === 'folder' || (contract.type === 'file' && !contract.bytecode)
+      // Show all folders and files
+      contract.type === 'folder' || contract.type === 'file'
     ),
     onError: (error) => {
       toast({
