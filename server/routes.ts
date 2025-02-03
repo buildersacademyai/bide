@@ -8,17 +8,26 @@ export function registerRoutes(app: Express): Server {
   // Contract CRUD operations
   app.post("/api/contracts", async (req, res) => {
     try {
-      console.log('Creating contract with data:', req.body);
+      const newContract = {
+        name: req.body.name,
+        type: req.body.type || 'file',
+        path: req.body.path || '',
+        parentId: req.body.parentId || null,
+        sourceCode: req.body.sourceCode || null,
+        abi: req.body.abi || null,
+        bytecode: req.body.bytecode || null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
 
-      if (!req.body.name || !req.body.type || !req.body.path) {
-        return res.status(400).json({ 
-          message: "Missing required fields: name, type, and path are required" 
-        });
-      }
+      console.log('Creating contract with data:', newContract);
 
-      const contract = await db.insert(contracts).values(req.body).returning();
-      console.log('Contract created:', contract[0]);
-      res.json(contract[0]);
+      const [contract] = await db.insert(contracts)
+        .values(newContract)
+        .returning();
+
+      console.log('Contract created:', contract);
+      res.json(contract);
     } catch (err) {
       console.error('Error creating contract:', err);
       res.status(500).json({ 
@@ -31,10 +40,11 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/contracts", async (_req, res) => {
     try {
       const allContracts = await db.query.contracts.findMany({
-        orderBy: (contracts, { desc }) => [desc(contracts.createdAt)],
+        orderBy: [desc(contracts.createdAt)],
       });
       res.json(allContracts);
     } catch (err) {
+      console.error('Error fetching contracts:', err);
       res.status(500).json({ message: "Failed to fetch contracts" });
     }
   });
@@ -52,7 +62,7 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: "Failed to fetch contract" });
     }
   });
-
+  
   app.patch("/api/contracts/:id", async (req, res) => {
     try {
       const contract = await db
