@@ -75,9 +75,9 @@ export function ContractEditor({ value, onChange }: Props) {
   if (!mounted) return null;
 
   return (
-    <Card className="border-2 rounded-lg overflow-hidden">
+    <Card className="w-full h-full border-2 rounded-lg overflow-hidden">
       <Editor
-        height="600px"
+        height="100%"
         defaultLanguage="sol"
         language="sol"
         theme="solidity-dark"
@@ -85,7 +85,7 @@ export function ContractEditor({ value, onChange }: Props) {
         onChange={(value) => onChange(value || '')}
         beforeMount={handleEditorWillMount}
         loading={
-          <div className="flex items-center justify-center h-[600px] bg-background">
+          <div className="flex items-center justify-center h-full bg-background">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         }
