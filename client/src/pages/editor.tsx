@@ -64,6 +64,7 @@ export default function Editor() {
   const handleFileSelect = (content: string, contractId: number) => {
     setSourceCode(content);
     setCurrentContractId(contractId);
+    setCompiledContract(null); // Clear compilation data when selecting new file
   };
 
   const handleFileDelete = (deletedContractId: number) => {
