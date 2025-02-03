@@ -231,18 +231,6 @@ export default function Editor() {
             <TabsContent value="deploy" className="mt-6">
               <Card className="p-6">
                 <div className="space-y-6">
-                  {compiledContract && currentContractId ? (
-                    <ContractDeployer
-                      contractId={currentContractId}
-                      abi={compiledContract.abi}
-                      bytecode={compiledContract.bytecode}
-                    />
-                  ) : (
-                    <div className="text-center p-6 text-muted-foreground">
-                      Compile a contract first to enable deployment
-                    </div>
-                  )}
-
                   <div className="mt-8">
                     <h3 className="text-lg font-semibold mb-4">Deployed Contracts</h3>
                     <DeployedContracts />
@@ -265,16 +253,7 @@ export default function Editor() {
             <TabsContent value="interact" className="mt-6">
               <Card className="p-6">
                 <div className="space-y-6">
-                  {compiledContract && currentContractId ? (
-                    <ContractInteraction
-                      address={compiledContract.address}
-                      abi={compiledContract.abi}
-                    />
-                  ) : (
-                    <div className="text-center p-6 text-muted-foreground">
-                      Deploy a contract first to enable interaction
-                    </div>
-                  )}
+                  <ContractInteraction />
                 </div>
               </Card>
             </TabsContent>
