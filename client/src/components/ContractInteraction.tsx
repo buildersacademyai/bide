@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ethers } from 'ethers';
-import { Loader2, ChevronDown } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -19,12 +19,35 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
+// Helper function to format result values
+function formatResult(result: any): string {
+  if (result === null || result === undefined) {
+    return 'No value';
+  }
+  if (result._isBigNumber || typeof result === 'bigint') {
+    return result.toString();
+  }
+  if (Array.isArray(result)) {
+    return result.map(item => formatResult(item)).join(', ');
+  }
+  if (typeof result === 'object') {
+    try {
+      return JSON.stringify(result, (_, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      , 2);
+    } catch (e) {
+      return 'Complex object';
+    }
+  }
+  return String(result);
+}
+
 // Separate component for function form to properly handle state
 function FunctionForm({ func, contractAddress, abi, onResult }: {
   func: any;
   contractAddress: string;
   abi: any[];
-  onResult: (functionName: string, result: any) => void;
+  onResult: (functionName: string, result: string) => void;
 }) {
   const [inputValues, setInputValues] = useState<string[]>(Array(func.inputs.length).fill(''));
   const [isLoading, setIsLoading] = useState(false);
@@ -50,16 +73,7 @@ function FunctionForm({ func, contractAddress, abi, onResult }: {
       });
 
       const result = await contract[func.name](...convertedInputs);
-
-      // Handle different types of return values
-      let displayResult = result;
-      if (ethers.isAddress(result)) {
-        displayResult = result;
-      } else if (typeof result === 'bigint') {
-        displayResult = result.toString();
-      }
-
-      onResult(func.name, displayResult);
+      onResult(func.name, formatResult(result));
     } catch (err) {
       console.error('Contract call error:', err);
       onResult(func.name, err instanceof Error ? err.message : 'Call failed');
@@ -106,7 +120,7 @@ function FunctionForm({ func, contractAddress, abi, onResult }: {
 
 export function ContractInteraction() {
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, any>>({});
+  const [results, setResults] = useState<Record<string, string>>({});
 
   // Fetch all deployed contracts
   const { data: contracts, isLoading: isLoadingContracts } = useQuery({
@@ -120,7 +134,7 @@ export function ContractInteraction() {
     }
   });
 
-  const handleResult = (functionName: string, result: any) => {
+  const handleResult = (functionName: string, result: string) => {
     setResults(prev => ({ ...prev, [functionName]: result }));
   };
 
@@ -143,7 +157,7 @@ export function ContractInteraction() {
   }
 
   const selectedContractData = selectedContract 
-    ? deployedContracts.find(c => c.id.toString() === selectedContract)
+    ? deployedContracts.find((c: any) => c.id.toString() === selectedContract)
     : null;
 
   return (
@@ -189,9 +203,9 @@ export function ContractInteraction() {
                         {results[func.name] && (
                           <div className="mt-2 p-2 bg-muted rounded-md">
                             <Label>Result:</Label>
-                            <div className="font-mono text-sm">
+                            <pre className="font-mono text-sm whitespace-pre-wrap break-all">
                               {results[func.name]}
-                            </div>
+                            </pre>
                           </div>
                         )}
                       </div>
@@ -252,9 +266,9 @@ export function ContractInteraction() {
                         {results[variable.name] && (
                           <div className="mt-2 p-2 bg-muted rounded-md">
                             <Label>Value:</Label>
-                            <div className="font-mono text-sm">
+                            <pre className="font-mono text-sm whitespace-pre-wrap break-all">
                               {results[variable.name]}
-                            </div>
+                            </pre>
                           </div>
                         )}
                       </div>
