@@ -17,16 +17,9 @@ import { UserProfile } from '@/components/UserProfile';
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract SimpleStorage {
-    uint256 private value;
+contract NewContract {
+    // Your contract code here
 
-    function setValue(uint256 _value) public {
-        value = _value;
-    }
-
-    function getValue() public view returns (uint256) {
-        return value;
-    }
 }`;
 
 export default function Editor() {
