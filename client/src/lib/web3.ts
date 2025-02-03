@@ -17,7 +17,7 @@ export async function connectWallet() {
     provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send("eth_requestAccounts", []);
     return accounts[0];
-  } catch (error) {
+  } catch (error: any) {
     if (error.code === 4001) {
       throw new Error("Please connect your MetaMask wallet");
     }
@@ -56,10 +56,11 @@ export async function deployContract(abi: any[], bytecode: string) {
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
 
     const contract = await factory.deploy();
-    const receipt = await contract.deployTransaction.wait();
+    await contract.waitForDeployment();
+    const address = await contract.getAddress();
 
-    return receipt.contractAddress;
-  } catch (error) {
+    return address;
+  } catch (error: any) {
     console.error('Deployment error:', error);
     if (error.code === 'INSUFFICIENT_FUNDS') {
       throw new Error('Insufficient funds for contract deployment. Please make sure you have enough ETH in your wallet.');
@@ -79,7 +80,7 @@ export async function getContract(address: string, abi: any[]) {
   try {
     const signer = await provider.getSigner();
     return new ethers.Contract(address, abi, signer);
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`Failed to get contract instance: ${error.message}`);
   }
 }

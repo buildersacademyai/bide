@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { connectWallet, getConnectedAccount } from '@/lib/web3';
+import { connectWallet, getConnectedAccount, deployContract } from '@/lib/web3';
 import { ContractEditor } from '@/components/ContractEditor';
 import { FileExplorer } from '@/components/FileExplorer';
 import { Button } from '@/components/ui/button';
@@ -78,10 +78,19 @@ export default function Editor() {
 
     setIsDeploying(true);
     try {
+      toast({
+        title: "Deploying contract",
+        description: "Please confirm the transaction in MetaMask...",
+      });
+
+      const address = await deployContract(compiledContract.abi, compiledContract.bytecode);
+
+      // Update contract in database with deployment info
       const response = await fetch(`/api/contracts/${currentContractId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          address,
           network: 'sepolia',
           abi: compiledContract.abi,
           bytecode: compiledContract.bytecode,
@@ -97,7 +106,7 @@ export default function Editor() {
 
       toast({
         title: "Contract deployed",
-        description: "Successfully deployed to Sepolia testnet",
+        description: `Successfully deployed to ${address}`,
       });
     } catch (err) {
       console.error('Deployment error:', err);

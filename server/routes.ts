@@ -165,7 +165,16 @@ export function registerRoutes(app: Express): Server {
 
   app.delete("/api/contracts/:id", async (req, res) => {
     try {
-      // First delete all child contracts recursively
+      // First fetch the contract to check if it has compiled files
+      const [contractToDelete] = await db.query.contracts.findMany({
+        where: eq(contracts.id, parseInt(req.params.id)),
+      });
+
+      if (!contractToDelete) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      // Delete all child contracts recursively
       const children = await db.query.contracts.findMany({
         where: eq(contracts.parentId, parseInt(req.params.id)),
       });
@@ -174,17 +183,29 @@ export function registerRoutes(app: Express): Server {
         await db.delete(contracts).where(eq(contracts.id, child.id));
       }
 
+      // Delete any compiled versions of this contract
+      if (contractToDelete.sourceCode) {
+        await db.delete(contracts)
+          .where(
+            and(
+              eq(contracts.name, contractToDelete.name),
+              eq(contracts.bytecode, contractToDelete.bytecode ?? '')
+            )
+          );
+      }
+
       // Then delete the contract itself
-      const contract = await db
-        .delete(contracts)
+      const [deletedContract] = await db.delete(contracts)
         .where(eq(contracts.id, parseInt(req.params.id)))
         .returning();
 
-      if (!contract.length) {
+      if (!deletedContract) {
         return res.status(404).json({ message: "Contract not found" });
       }
-      res.json(contract[0]);
+
+      res.json(deletedContract);
     } catch (err) {
+      console.error('Delete error:', err);
       res.status(500).json({ message: "Failed to delete contract" });
     }
   });
