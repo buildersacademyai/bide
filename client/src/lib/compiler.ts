@@ -54,8 +54,7 @@ async function loadSolcJs() {
       // Wait for the Module to be fully initialized
       const checkForModule = () => {
         if ((window as any).Module) {
-          const solc = (window as any).Module;
-          resolve(solc);
+          resolve((window as any).Module);
         } else {
           setTimeout(checkForModule, 100);
         }
