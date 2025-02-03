@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
@@ -8,16 +8,27 @@ import { useQueryClient } from '@tanstack/react-query';
 
 interface Props {
   sourceCode: string;
+  contractId?: number;
   onCompileSuccess: (abi: any[], bytecode: string) => void;
 }
 
-export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
+export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: Props) {
   const { toast } = useToast();
   const [compiling, setCompiling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastCompiledCode, setLastCompiledCode] = useState<string>('');
   const queryClient = useQueryClient();
 
   const handleCompile = async () => {
+    // Skip if code hasn't changed since last compilation
+    if (sourceCode === lastCompiledCode) {
+      toast({
+        title: "No changes detected",
+        description: "The contract code hasn't changed since the last compilation.",
+      });
+      return;
+    }
+
     if (!sourceCode.trim()) {
       setError('Source code cannot be empty');
       return;
@@ -53,6 +64,7 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
         throw new Error(data.message || 'Compilation failed');
       }
 
+      setLastCompiledCode(sourceCode);
       await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
       toast({
@@ -73,6 +85,11 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       setCompiling(false);
     }
   };
+
+  // Reset lastCompiledCode if contractId changes (new contract loaded)
+  useEffect(() => {
+    setLastCompiledCode('');
+  }, [contractId]);
 
   return (
     <>

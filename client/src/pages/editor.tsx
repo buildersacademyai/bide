@@ -176,22 +176,16 @@ export default function Editor() {
             </Card>
             <div className="flex gap-4">
               <ContractCompiler 
-                sourceCode={sourceCode} 
+                sourceCode={sourceCode}
+                contractId={currentContractId}
                 onCompileSuccess={handleCompileSuccess}
               />
-              {compiledContract && (
-                <Button
-                  className="flex-1"
-                  onClick={handleDeploy}
-                  disabled={isDeploying || !account}
-                >
-                  {isDeploying ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Rocket className="mr-2 h-4 w-4" />
-                  )}
-                  {isDeploying ? 'Deploying...' : 'Deploy Contract'}
-                </Button>
+              {compiledContract && account && (
+                <ContractDeployer
+                  contractId={currentContractId!}
+                  abi={compiledContract.abi}
+                  bytecode={compiledContract.bytecode}
+                />
               )}
             </div>
           </TabsContent>
