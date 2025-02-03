@@ -11,14 +11,23 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
     // Load the Solidity compiler
     const solc = await loadSolcJs();
 
+    // Create wrapper
+    const wrapper = solc.cwrap('solidity_compile', 'string', ['string']);
+
     const input = {
       language: 'Solidity',
       sources: { 'Contract.sol': { content: source } },
-      settings: { outputSelection: { '*': { '*': ['*'] } } }
+      settings: { 
+        outputSelection: { '*': { '*': ['*'] } },
+        optimizer: {
+          enabled: true,
+          runs: 200
+        }
+      }
     };
 
-    // Compile using loaded compiler
-    const output = JSON.parse(solc.compile(JSON.stringify(input)));
+    // Compile using wrapped compiler
+    const output = JSON.parse(wrapper(JSON.stringify(input)));
 
     if (output.errors?.length) {
       const errors = output.errors
@@ -53,15 +62,16 @@ async function loadSolcJs(): Promise<any> {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = `https://binaries.soliditylang.org/bin/soljson-${SOLC_VERSION}.js`;
+    script.async = true;
     script.onload = () => {
-      const checkForModule = () => {
-        if ((window as any).Module) {
-          resolve((window as any).Module);
-        } else {
-          setTimeout(checkForModule, 100);
+      // Initialize the Module with proper configuration
+      (window as any).Module = {
+        print: console.log,
+        printErr: console.error,
+        onRuntimeInitialized: function() {
+          resolve(this);
         }
       };
-      checkForModule();
     };
     script.onerror = () => reject(new Error('Failed to load Solidity compiler'));
     document.head.appendChild(script);
