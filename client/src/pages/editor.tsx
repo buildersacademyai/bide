@@ -32,8 +32,10 @@ export default function Editor() {
   const queryClient = useQueryClient();
   const [sourceCode, setSourceCode] = useState(DEFAULT_CONTRACT);
   const [currentContractId, setCurrentContractId] = useState<number | undefined>();
-  const [compiledAbi, setCompiledAbi] = useState<any[]>([]);
-  const [compiledBytecode, setCompiledBytecode] = useState('');
+  const [compiledContract, setCompiledContract] = useState<{
+    abi: any[];
+    bytecode: string;
+  } | null>(null);
 
   const { data: account, isLoading: isWalletLoading } = useQuery({ 
     queryKey: ['wallet'],
@@ -44,11 +46,14 @@ export default function Editor() {
   const handleFileSelect = (content: string, contractId: number) => {
     setSourceCode(content);
     setCurrentContractId(contractId);
+    // Reset compilation results when switching files
+    setCompiledContract(null);
   };
 
   const handleCompileSuccess = (abi: any[], bytecode: string) => {
-    setCompiledAbi(abi);
-    setCompiledBytecode(bytecode);
+    setCompiledContract({ abi, bytecode });
+    // Invalidate queries to refresh the UI with new compilation results
+    queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
   };
 
   const handleConnect = async () => {
@@ -144,7 +149,10 @@ export default function Editor() {
                   <p className="text-muted-foreground mb-4">
                     Deploy your compiled smart contract to Ethereum testnet.
                   </p>
-                  <Button className="w-full gap-2">
+                  <Button 
+                    className="w-full gap-2" 
+                    disabled={!compiledContract || !account}
+                  >
                     <Rocket className="w-4 h-4" />
                     Deploy Contract
                   </Button>
