@@ -37,6 +37,7 @@ export default function Editor() {
     abi: any[];
     bytecode: string;
   } | null>(null);
+  const [isDeploying, setIsDeploying] = useState(false);
 
   const { data: account, isLoading: isWalletLoading } = useQuery({ 
     queryKey: ['wallet'],
@@ -47,13 +48,11 @@ export default function Editor() {
   const handleFileSelect = (content: string, contractId: number) => {
     setSourceCode(content);
     setCurrentContractId(contractId);
-    // Reset compilation results when switching files
     setCompiledContract(null);
   };
 
   const handleCompileSuccess = (abi: any[], bytecode: string) => {
     setCompiledContract({ abi, bytecode });
-    // Invalidate queries to refresh the UI with new compilation results
     queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
   };
 
@@ -71,6 +70,44 @@ export default function Editor() {
         title: "Connection failed",
         description: err instanceof Error ? err.message : "Failed to connect wallet",
       });
+    }
+  };
+
+  const handleDeploy = async () => {
+    if (!compiledContract || !currentContractId || !account) return;
+
+    setIsDeploying(true);
+    try {
+      const response = await fetch(`/api/contracts/${currentContractId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          network: 'sepolia',
+          abi: compiledContract.abi,
+          bytecode: compiledContract.bytecode,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update contract deployment info');
+      }
+
+      // Refresh contracts list
+      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+
+      toast({
+        title: "Contract deployed",
+        description: "Successfully deployed to Sepolia testnet",
+      });
+    } catch (err) {
+      console.error('Deployment error:', err);
+      toast({
+        variant: "destructive",
+        title: "Deployment failed",
+        description: err instanceof Error ? err.message : "Failed to deploy contract",
+      });
+    } finally {
+      setIsDeploying(false);
     }
   };
 
@@ -125,10 +162,26 @@ export default function Editor() {
                 contractId={currentContractId}
               />
             </Card>
-            <ContractCompiler 
-              sourceCode={sourceCode} 
-              onCompileSuccess={handleCompileSuccess}
-            />
+            <div className="flex gap-4">
+              <ContractCompiler 
+                sourceCode={sourceCode} 
+                onCompileSuccess={handleCompileSuccess}
+              />
+              {compiledContract && (
+                <Button
+                  className="flex-1"
+                  onClick={handleDeploy}
+                  disabled={isDeploying || !account}
+                >
+                  {isDeploying ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Rocket className="mr-2 h-4 w-4" />
+                  )}
+                  {isDeploying ? 'Deploying...' : 'Deploy Contract'}
+                </Button>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="compile" className="mt-6">

@@ -3,9 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { AlertCircle, Loader2, Terminal } from 'lucide-react';
-import { apiRequest } from '@/lib/queryClient';
-import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface Props {
   sourceCode: string;
@@ -28,7 +27,6 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
     setError(null);
 
     try {
-      // Show loading toast
       toast({
         title: "Compiling contract",
         description: "Please wait while the contract is being compiled...",
@@ -55,16 +53,13 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
         throw new Error(data.message || 'Compilation failed');
       }
 
-      // Refresh the contracts list
       await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
-      // Show success message
       toast({
         title: "Compilation successful",
         description: `Contract compiled successfully`,
       });
 
-      // Call success callback with the results
       onCompileSuccess(data.abi, data.bytecode);
     } catch (err) {
       console.error('Compilation error:', err);
@@ -80,21 +75,19 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
   };
 
   return (
-    <Card className="p-4">
-      <div className="flex gap-2">
-        <Button 
-          onClick={handleCompile} 
-          disabled={compiling || !sourceCode.trim()}
-          className="flex-1"
-        >
-          {compiling ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Terminal className="mr-2 h-4 w-4" />
-          )}
-          {compiling ? 'Compiling...' : 'Compile Contract'}
-        </Button>
-      </div>
+    <>
+      <Button 
+        onClick={handleCompile} 
+        disabled={compiling || !sourceCode.trim()}
+        className="flex-1"
+      >
+        {compiling ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Terminal className="mr-2 h-4 w-4" />
+        )}
+        {compiling ? 'Compiling...' : 'Compile Contract'}
+      </Button>
 
       {error && (
         <Alert variant="destructive" className="mt-4">
@@ -104,6 +97,6 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
           </AlertDescription>
         </Alert>
       )}
-    </Card>
+    </>
   );
 }
