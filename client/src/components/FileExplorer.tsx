@@ -160,45 +160,67 @@ export function FileExplorer({ onFileSelect }: Props) {
     setExpandedFolders(newExpanded);
   };
 
-    const handleFileCreate = async (parentId: string | null = null) => {
+  const handleFileCreate = async (parentId: string | null = null) => {
     if (!newItemName) return;
-
+  
     const path = parentId ? `${parentId}/${newItemName}` : newItemName;
     const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
     const contractName = fileName.replace('.sol', '');
-
+  
     const sourceCode = `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract ${contractName} {
-    string public message;
-
-    constructor() {
-        message = "Hello, Blockchain!";
-    }
-
-    function setMessage(string memory newMessage) public {
-        message = newMessage;
-    }
-
-    function getMessage() public view returns (string memory) {
-        return message;
-    }
-}`;
-
+  pragma solidity ^0.8.0;
+  
+  contract ${contractName} {
+      string public message;
+  
+      constructor() {
+          message = "Hello, Blockchain!";
+      }
+  
+      function setMessage(string memory newMessage) public {
+          message = newMessage;
+      }
+  
+      function getMessage() public view returns (string memory) {
+          return message;
+      }
+  }`;
+  
     try {
+      // First check if root folder exists
+      const rootResponse = await fetch('/api/contracts?type=folder&name=Contracts');
+      let rootFolder = await rootResponse.json();
+  
+      let effectiveParentId = parentId;
+  
+      // If no root folder exists or no parent specified, create root folder
+      if (!rootFolder || (!parentId && rootFolder.length === 0)) {
+        const rootFolderResponse = await fetch('/api/contracts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Contracts',
+            type: 'folder',
+            path: '',
+            parentId: null
+          })
+        });
+        rootFolder = await rootFolderResponse.json();
+        effectiveParentId = rootFolder.id.toString();
+      }
+  
+      // Create the contract file
       await createMutation.mutateAsync({
         name: fileName,
         type: 'file',
         path,
-        parentId: parentId ? parseInt(parentId) : null,
+        parentId: effectiveParentId ? parseInt(effectiveParentId) : null,
         sourceCode,
       });
     } catch (error) {
       console.error('Error creating file:', error);
     }
   };
-
 
   const handleFolderCreate = async (parentId: string | null = null) => {
     if (!newItemName) return;

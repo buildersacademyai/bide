@@ -141,11 +141,21 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.get("/api/contracts", async (_req, res) => {
+  app.get("/api/contracts", async (req, res) => {
     try {
-      const allContracts = await db.query.contracts.findMany({
-        orderBy: [desc(contracts.createdAt)],
-      });
+      const type = req.query.type as string;
+      const name = req.query.name as string;
+
+      let query = db.select().from(contracts);
+
+      if (type) {
+        query = query.where(eq(contracts.type, type));
+      }
+      if (name) {
+        query = query.where(eq(contracts.name, name));
+      }
+
+      const allContracts = await query.orderBy(desc(contracts.createdAt));
       res.json(allContracts);
     } catch (err) {
       console.error('Error fetching contracts:', err);
