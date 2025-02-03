@@ -23,6 +23,10 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
           '*': {
             '*': ['*']
           }
+        },
+        optimizer: {
+          enabled: true,
+          runs: 200
         }
       }
     };
@@ -58,36 +62,53 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
   }
 }
 
+let solcPromise: Promise<any> | null = null;
+
 function loadBrowserSolc(): Promise<any> {
-  return new Promise((resolve, reject) => {
+  if (solcPromise) {
+    return solcPromise;
+  }
+
+  solcPromise = new Promise((resolve, reject) => {
+    // Check if Module is already loaded
+    // @ts-ignore
+    if (window.Module && window.Module.cwrap) {
+      // @ts-ignore
+      const compile = window.Module.cwrap('compileStandard', 'string', ['string']);
+      resolve(compile);
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = `https://binaries.soliditylang.org/bin/soljson-${SOLC_VERSION}.js`;
     script.async = true;
-    script.onload = () => {
-      // @ts-ignore
-      if (!window.Module) {
-        reject(new Error('Failed to load Solidity compiler module'));
-        return;
-      }
 
-      // Wait for module initialization
+    script.onload = () => {
+      // Wait for module initialization with longer timeout
+      let attempts = 0;
+      const maxAttempts = 50; // 10 seconds total
       const checkInterval = setInterval(() => {
+        attempts++;
         // @ts-ignore
-        if (window.Module.cwrap) {
+        if (window.Module && window.Module.cwrap) {
           clearInterval(checkInterval);
           // @ts-ignore
-          const solidity_compile = window.Module.cwrap('compileStandard', 'string', ['string']);
-          resolve(solidity_compile);
+          const compile = window.Module.cwrap('compileStandard', 'string', ['string']);
+          resolve(compile);
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkInterval);
+          reject(new Error('Timeout waiting for Solidity compiler initialization'));
         }
-      }, 100);
-
-      // Set timeout for initialization
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        reject(new Error('Timeout waiting for Solidity compiler initialization'));
-      }, 5000);
+      }, 200);
     };
-    script.onerror = () => reject(new Error('Failed to load Solidity compiler'));
+
+    script.onerror = () => {
+      solcPromise = null; // Reset promise on error
+      reject(new Error('Failed to load Solidity compiler'));
+    };
+
     document.head.appendChild(script);
   });
+
+  return solcPromise;
 }
