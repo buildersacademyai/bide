@@ -8,13 +8,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { User, Loader2 } from "lucide-react";
+import { User, Loader2, LogOut } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { getConnectedAccount } from '@/lib/web3';
 
 export function UserProfile() {
   const { data: contracts, isLoading } = useQuery<any>({ 
     queryKey: ['/api/contracts']
   });
+
+  const handleLogout = async () => {
+    window.location.reload(); // This will reset the wallet connection
+  };
+
+  const checkConnection = async () => {
+    const account = await getConnectedAccount();
+    return account;
+  };
+
+  const { data: account } = useQuery({ 
+    queryKey: ['wallet'],
+    queryFn: checkConnection
+  });
+
+  if (!account) return null;
 
   return (
     <DropdownMenu>
@@ -24,7 +41,13 @@ export function UserProfile() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[300px]">
-        <DropdownMenuLabel>Your Contracts</DropdownMenuLabel>
+        <DropdownMenuLabel className="flex justify-between items-center">
+          <span>Your Contracts</span>
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Disconnect
+          </Button>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="max-h-[400px] overflow-y-auto p-2">
           {isLoading ? (

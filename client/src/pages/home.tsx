@@ -30,16 +30,24 @@ export default function Home() {
   const [abi, setAbi] = useState<any[]>([]);
   const [bytecode, setBytecode] = useState('');
   const [contractAddress, setContractAddress] = useState('');
-  const [connected, setConnected] = useState(false);
 
   const { data: contracts } = useQuery<any>({ 
     queryKey: ['/api/contracts']
   });
 
+  const checkConnection = async () => {
+    const account = await getConnectedAccount();
+    return account;
+  };
+
+  const { data: account } = useQuery({ 
+    queryKey: ['wallet'],
+    queryFn: checkConnection
+  });
+
   const handleConnect = async () => {
     try {
       await connectWallet();
-      setConnected(true);
       toast({
         title: "Connected to wallet",
         description: "Successfully connected to MetaMask",
@@ -75,13 +83,15 @@ export default function Home() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Blockchain IDE</h1>
         <div className="flex items-center gap-4">
-          <Button onClick={handleConnect} disabled={connected}>
-            {connected ? 'Connected to MetaMask' : 'Connect Wallet'}
-          </Button>
+          {!account && (
+            <Button onClick={handleConnect}>
+              Connect Wallet
+            </Button>
+          )}
           <UserProfile />
         </div>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
           <ContractEditor value={sourceCode} onChange={setSourceCode} />
@@ -106,7 +116,7 @@ export default function Home() {
           {contractAddress && (
             <ContractInteraction address={contractAddress} abi={abi} />
           )}
-          
+
           {contracts?.length > 0 && (
             <div className="mt-8">
               <h2 className="text-xl font-bold mb-4">Deployed Contracts</h2>
