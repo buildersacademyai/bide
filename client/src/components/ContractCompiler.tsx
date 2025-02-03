@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2 } from 'lucide-react';
@@ -15,7 +16,7 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
   const handleCompile = async () => {
     setCompiling(true);
     setError(null);
-    
+
     try {
       const result = await compileSolidity(sourceCode);
       if (result.errors?.length) {

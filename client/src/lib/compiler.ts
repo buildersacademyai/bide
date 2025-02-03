@@ -1,49 +1,66 @@
-import * as wrapper from 'solc/wrapper';
-
 export interface CompileResult {
   abi: any[];
   bytecode: string;
   errors?: any[];
 }
 
-let solc: any = null;
+let solcjs: any = null;
 
-async function loadCompiler() {
-  if (solc) return solc;
+async function loadCompiler(): Promise<any> {
+  if (solcjs) return solcjs;
 
-  // Load the solc compiler dynamically
-  const response = await fetch('https://binaries.soliditylang.org/bin/soljson-v0.8.19+commit.7dd6d404.js');
-  const compiler = await response.text();
-  // Define it in window scope
+  // Create a script element to load solc
   const script = document.createElement('script');
-  script.text = compiler;
-  document.head.appendChild(script);
+  script.src = 'https://binaries.soliditylang.org/bin/soljson-v0.8.19+commit.7dd6d404.js';
+  script.async = true;
 
-  // @ts-ignore
-  solc = wrapper(window.Module);
-  return solc;
+  // Wait for the script to load
+  await new Promise((resolve, reject) => {
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  // Wait for Module to be defined by the solc script
+  while (typeof (window as any).Module === 'undefined') {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+
+  // Initialize the compiler
+  return new Promise((resolve) => {
+    (window as any).Module.onRuntimeInitialized = () => {
+      const soljson = (window as any).Module;
+      // Create the solc compiler instance
+      solcjs = {
+        compile: (input: string) => {
+          return soljson.cwrap('solidity_compile', 'string', ['string'])(input);
+        }
+      };
+      resolve(solcjs);
+    };
+  });
 }
 
 export async function compileSolidity(source: string): Promise<CompileResult> {
-  const compiler = await loadCompiler();
+  try {
+    const compiler = await loadCompiler();
 
-  const input = {
-    language: 'Solidity',
-    sources: {
-      'contract.sol': {
-        content: source
-      }
-    },
-    settings: {
-      outputSelection: {
-        '*': {
-          '*': ['*']
+    const input = {
+      language: 'Solidity',
+      sources: {
+        'contract.sol': {
+          content: source
+        }
+      },
+      settings: {
+        outputSelection: {
+          '*': {
+            '*': ['*']
+          }
         }
       }
-    }
-  };
+    };
 
-  try {
     const output = JSON.parse(compiler.compile(JSON.stringify(input)));
 
     if (output.errors?.some((e: any) => e.severity === 'error')) {
