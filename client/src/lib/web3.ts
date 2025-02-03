@@ -13,31 +13,73 @@ export async function connectWallet() {
     throw new Error("MetaMask not found! Please install MetaMask extension.");
   }
 
-  provider = new ethers.BrowserProvider(window.ethereum);
-  const accounts = await provider.send("eth_requestAccounts", []);
-  return accounts[0];
+  try {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    const accounts = await provider.send("eth_requestAccounts", []);
+    return accounts[0];
+  } catch (error) {
+    if (error.code === 4001) {
+      throw new Error("Please connect your MetaMask wallet");
+    }
+    throw error;
+  }
 }
 
 export async function getConnectedAccount() {
-  if (!provider) return null;
-  const accounts = await provider.send("eth_accounts", []);
-  return accounts[0] || null;
+  if (!provider) {
+    try {
+      provider = new ethers.BrowserProvider(window.ethereum);
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const accounts = await provider.send("eth_accounts", []);
+    return accounts[0] || null;
+  } catch {
+    return null;
+  }
 }
 
-export async function deployContract(abi: any[], bytecode: string, args: any[] = []) {
-  if (!provider) throw new Error("Not connected to wallet");
+export async function deployContract(abi: any[], bytecode: string) {
+  if (!provider) {
+    throw new Error("Please connect your wallet first");
+  }
 
-  const signer = await provider.getSigner();
-  const factory = new ethers.ContractFactory(abi, bytecode, signer);
-  const contract = await factory.deploy(...args);
-  await contract.waitForDeployment();
+  if (!abi || !bytecode) {
+    throw new Error("Contract ABI and bytecode are required");
+  }
 
-  return contract.target as string;
+  try {
+    const signer = await provider.getSigner();
+    const factory = new ethers.ContractFactory(abi, bytecode, signer);
+
+    const contract = await factory.deploy();
+    const receipt = await contract.deployTransaction.wait();
+
+    return receipt.contractAddress;
+  } catch (error) {
+    console.error('Deployment error:', error);
+    if (error.code === 'INSUFFICIENT_FUNDS') {
+      throw new Error('Insufficient funds for contract deployment. Please make sure you have enough ETH in your wallet.');
+    } else if (error.code === 4001) {
+      throw new Error('Transaction rejected. Please confirm the transaction in MetaMask.');
+    } else {
+      throw new Error(`Failed to deploy contract: ${error.message || 'Unknown error'}`);
+    }
+  }
 }
 
 export async function getContract(address: string, abi: any[]) {
-  if (!provider) throw new Error("Not connected to wallet");
+  if (!provider) {
+    throw new Error("Please connect your wallet first");
+  }
 
-  const signer = await provider.getSigner();
-  return new ethers.Contract(address, abi, signer);
+  try {
+    const signer = await provider.getSigner();
+    return new ethers.Contract(address, abi, signer);
+  } catch (error) {
+    throw new Error(`Failed to get contract instance: ${error.message}`);
+  }
 }
