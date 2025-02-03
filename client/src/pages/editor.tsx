@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { connectWallet, getConnectedAccount } from '@/lib/web3';
 import { ContractEditor } from '@/components/ContractEditor';
-import { ContractCompiler } from '@/components/ContractCompiler';
-import { ContractDeployer } from '@/components/ContractDeployer';
-import { ContractInteraction } from '@/components/ContractInteraction';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, CheckCircle2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import { Loader2, Code2, Rocket, Terminal } from 'lucide-react';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -28,14 +27,6 @@ export default function Editor() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [sourceCode, setSourceCode] = useState(DEFAULT_CONTRACT);
-  const [abi, setAbi] = useState<any[]>([]);
-  const [bytecode, setBytecode] = useState('');
-  const [contractAddress, setContractAddress] = useState('');
-  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
-
-  const { data: contracts } = useQuery<any>({ 
-    queryKey: ['/api/contracts']
-  });
 
   const { data: account, isLoading: isWalletLoading } = useQuery({ 
     queryKey: ['wallet'],
@@ -60,133 +51,81 @@ export default function Editor() {
     }
   };
 
-  const handleCompileSuccess = (abi: any[], bytecode: string) => {
-    setAbi(abi);
-    setBytecode(bytecode);
-    toast({
-      title: "Compilation successful",
-      description: "Contract compiled successfully",
-    });
-  };
-
-  const handleDeploySuccess = (address: string) => {
-    setContractAddress(address);
-    toast({
-      title: "Deployment successful",
-      description: `Contract deployed at ${address}`,
-    });
-  };
-
-  const copyToClipboard = async (text: string, id: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopiedStates(prev => ({ ...prev, [id]: true }));
-    setTimeout(() => {
-      setCopiedStates(prev => ({ ...prev, [id]: false }));
-    }, 2000);
-  };
-
   return (
-    <div className="container mx-auto p-4">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Smart Contract Editor</h1>
-        <p className="text-muted-foreground mt-2">
-          Write, compile, and deploy your smart contracts
-        </p>
-      </div>
+    <div className="container mx-auto p-4 space-y-8">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Smart Contract IDE
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Write, compile, and deploy your smart contracts
+          </p>
+        </div>
 
-      {!isWalletLoading && !account && (
-        <div className="mb-8 p-4 border rounded-lg bg-muted">
-          <p className="mb-4">Connect your wallet to start deploying contracts</p>
-          <Button onClick={handleConnect}>
+        {!isWalletLoading && !account ? (
+          <Button onClick={handleConnect} className="gap-2">
+            <Terminal className="w-4 h-4" />
             Connect Wallet
           </Button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div>
-          <ContractEditor value={sourceCode} onChange={setSourceCode} />
-          <div className="mt-4">
-            <ContractCompiler
-              sourceCode={sourceCode}
-              onCompileSuccess={handleCompileSuccess}
-            />
+        ) : (
+          <div className="text-sm text-muted-foreground">
+            Connected: {account?.slice(0, 6)}...{account?.slice(-4)}
           </div>
-          {abi.length > 0 && (
-            <div className="mt-4">
-              <ContractDeployer
-                abi={abi}
-                bytecode={bytecode}
-                onDeploySuccess={handleDeploySuccess}
-              />
-            </div>
-          )}
-        </div>
-
-        <div>
-          {contractAddress && (
-            <ContractInteraction address={contractAddress} abi={abi} />
-          )}
-
-          {contracts?.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-xl font-bold mb-4">Deployed Contracts</h2>
-              {contracts.map((contract: any) => (
-                <div 
-                  key={contract.id}
-                  className="p-4 border rounded-lg mb-4"
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <p className="font-medium">{contract.name || 'Unnamed Contract'}</p>
-                      <p className="text-sm text-muted-foreground truncate">{contract.address || 'Not deployed'}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setAbi(contract.abi);
-                        setContractAddress(contract.address);
-                      }}
-                    >
-                      Interact
-                    </Button>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="flex gap-2"
-                      onClick={() => copyToClipboard(JSON.stringify(contract.abi), `abi-${contract.id}`)}
-                    >
-                      {copiedStates[`abi-${contract.id}`] ? (
-                        <CheckCircle2 className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                      Copy ABI
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="flex gap-2"
-                      onClick={() => copyToClipboard(contract.bytecode, `bytecode-${contract.id}`)}
-                    >
-                      {copiedStates[`bytecode-${contract.id}`] ? (
-                        <CheckCircle2 className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                      Copy Bytecode
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
+
+      <Tabs defaultValue="editor" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+          <TabsTrigger value="editor" className="gap-2">
+            <Code2 className="w-4 h-4" />
+            Editor
+          </TabsTrigger>
+          <TabsTrigger value="compile" className="gap-2">
+            <Terminal className="w-4 h-4" />
+            Compile
+          </TabsTrigger>
+          <TabsTrigger value="deploy" className="gap-2">
+            <Rocket className="w-4 h-4" />
+            Deploy
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="editor" className="mt-6">
+          <Card className="p-6">
+            <ContractEditor 
+              value={sourceCode} 
+              onChange={setSourceCode} 
+            />
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="compile" className="mt-6">
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Compile Contract</h2>
+            <p className="text-muted-foreground mb-4">
+              Compile your Solidity smart contract to generate ABI and bytecode.
+            </p>
+            <Button disabled className="w-full gap-2">
+              <Terminal className="w-4 h-4" />
+              Coming Soon
+            </Button>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="deploy" className="mt-6">
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Deploy Contract</h2>
+            <p className="text-muted-foreground mb-4">
+              Deploy your compiled smart contract to Ethereum testnet.
+            </p>
+            <Button disabled className="w-full gap-2">
+              <Rocket className="w-4 h-4" />
+              Coming Soon
+            </Button>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
