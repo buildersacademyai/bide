@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { connectWallet, getConnectedAccount } from '@/lib/web3';
 import { ContractEditor } from '@/components/ContractEditor';
 import { ContractCompiler } from '@/components/ContractCompiler';
@@ -26,6 +26,7 @@ contract SimpleStorage {
 
 export default function Home() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [sourceCode, setSourceCode] = useState(DEFAULT_CONTRACT);
   const [abi, setAbi] = useState<any[]>([]);
   const [bytecode, setBytecode] = useState('');
@@ -35,19 +36,16 @@ export default function Home() {
     queryKey: ['/api/contracts']
   });
 
-  const checkConnection = async () => {
-    const account = await getConnectedAccount();
-    return account;
-  };
-
-  const { data: account } = useQuery({ 
+  const { data: account, isLoading: isWalletLoading } = useQuery({ 
     queryKey: ['wallet'],
-    queryFn: checkConnection
+    queryFn: getConnectedAccount,
+    refetchOnWindowFocus: true
   });
 
   const handleConnect = async () => {
     try {
       await connectWallet();
+      await queryClient.invalidateQueries({ queryKey: ['wallet'] });
       toast({
         title: "Connected to wallet",
         description: "Successfully connected to MetaMask",
@@ -83,7 +81,7 @@ export default function Home() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Blockchain IDE</h1>
         <div className="flex items-center gap-4">
-          {!account && (
+          {!isWalletLoading && !account && (
             <Button onClick={handleConnect}>
               Connect Wallet
             </Button>
