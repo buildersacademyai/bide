@@ -187,7 +187,15 @@ export default function Editor() {
           <TabsContent value="deploy" className="mt-6">
             <Card className="p-6">
               <div className="space-y-6">
-                {compiledContract && currentContractId ? (
+                {!account ? (
+                  <div className="text-center p-6">
+                    <p className="text-muted-foreground mb-4">Connect your wallet to deploy contracts</p>
+                    <Button onClick={handleConnect} className="gap-2">
+                      <Terminal className="w-4 h-4" />
+                      Connect Wallet
+                    </Button>
+                  </div>
+                ) : compiledContract && currentContractId ? (
                   <ContractDeployer
                     contractId={currentContractId}
                     abi={compiledContract.abi}
