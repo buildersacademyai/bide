@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { connectWallet } from '@/lib/web3';
+import { connectWallet, getConnectedAccount } from '@/lib/web3';
 import { ContractEditor } from '@/components/ContractEditor';
 import { ContractCompiler } from '@/components/ContractCompiler';
 import { ContractDeployer } from '@/components/ContractDeployer';
