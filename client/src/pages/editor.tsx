@@ -13,6 +13,7 @@ import { DeployedContracts } from '@/components/DeployedContracts';
 import { ContractCompiler } from '@/components/ContractCompiler';
 import { ContractDeployer } from '@/components/ContractDeployer';
 import { UserProfile } from '@/components/UserProfile';
+import { Footer } from '@/components/Footer';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -139,109 +140,112 @@ export default function Editor() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
-      <FileExplorer onFileSelect={handleFileSelect} />
+    <div className="flex flex-col min-h-screen">
+      <div className="flex flex-1 h-[calc(100vh-4rem)]">
+        <FileExplorer onFileSelect={handleFileSelect} />
 
-      <div className="flex-1 p-4 space-y-8 overflow-y-auto">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-              Smart Contract IDE
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Write, compile, and deploy your smart contracts
-            </p>
+        <div className="flex-1 p-4 space-y-8 overflow-y-auto">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                Smart Contract IDE
+              </h1>
+              <p className="text-muted-foreground mt-2">
+                Write, compile, and deploy your smart contracts
+              </p>
+            </div>
+
+            {!isWalletLoading ? (
+              !account ? (
+                <Button onClick={handleConnect} className="gap-2">
+                  <Terminal className="w-4 h-4" />
+                  Connect Wallet
+                </Button>
+              ) : (
+                <UserProfile address={account} />
+              )
+            ) : (
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            )}
           </div>
 
-          {!isWalletLoading ? (
-            !account ? (
-              <Button onClick={handleConnect} className="gap-2">
+          <Tabs defaultValue="editor" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+              <TabsTrigger value="editor" className="gap-2">
+                <Code2 className="w-4 h-4" />
+                Editor
+              </TabsTrigger>
+              <TabsTrigger value="compile" className="gap-2">
                 <Terminal className="w-4 h-4" />
-                Connect Wallet
-              </Button>
-            ) : (
-              <UserProfile address={account} />
-            )
-          ) : (
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          )}
-        </div>
+                Compile
+              </TabsTrigger>
+              <TabsTrigger value="deploy" className="gap-2">
+                <Rocket className="w-4 h-4" />
+                Deploy
+              </TabsTrigger>
+            </TabsList>
 
-        <Tabs defaultValue="editor" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
-            <TabsTrigger value="editor" className="gap-2">
-              <Code2 className="w-4 h-4" />
-              Editor
-            </TabsTrigger>
-            <TabsTrigger value="compile" className="gap-2">
-              <Terminal className="w-4 h-4" />
-              Compile
-            </TabsTrigger>
-            <TabsTrigger value="deploy" className="gap-2">
-              <Rocket className="w-4 h-4" />
-              Deploy
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="editor" className="mt-6 space-y-4">
-            <Card className="p-6">
-              <ContractEditor 
-                value={sourceCode} 
-                onChange={setSourceCode}
-                contractId={currentContractId}
-              />
-            </Card>
-            <div className="flex gap-4">
-              <ContractCompiler 
-                sourceCode={sourceCode}
-                contractId={currentContractId}
-                onCompileSuccess={handleCompileSuccess}
-              />
-              {compiledContract && account && (
-                <ContractDeployer
-                  contractId={currentContractId!}
-                  abi={compiledContract.abi}
-                  bytecode={compiledContract.bytecode}
+            <TabsContent value="editor" className="mt-6 space-y-4">
+              <Card className="p-6">
+                <ContractEditor 
+                  value={sourceCode} 
+                  onChange={setSourceCode}
+                  contractId={currentContractId}
                 />
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="compile" className="mt-6">
-            <Card className="p-6">
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-xl font-semibold mb-4">Compilation Results</h2>
-                  <CompilationResults />
-                </div>
-              </div>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="deploy" className="mt-6">
-            <Card className="p-6">
-              <div className="space-y-6">
-                {compiledContract && currentContractId ? (
+              </Card>
+              <div className="flex gap-4">
+                <ContractCompiler 
+                  sourceCode={sourceCode}
+                  contractId={currentContractId}
+                  onCompileSuccess={handleCompileSuccess}
+                />
+                {compiledContract && account && (
                   <ContractDeployer
-                    contractId={currentContractId}
+                    contractId={currentContractId!}
                     abi={compiledContract.abi}
                     bytecode={compiledContract.bytecode}
                   />
-                ) : (
-                  <div className="text-center p-6 text-muted-foreground">
-                    Compile a contract first to enable deployment
-                  </div>
                 )}
-
-                <div className="mt-8">
-                  <h3 className="text-lg font-semibold mb-4">Deployed Contracts</h3>
-                  <DeployedContracts />
-                </div>
               </div>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+
+            <TabsContent value="compile" className="mt-6">
+              <Card className="p-6">
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4">Compilation Results</h2>
+                    <CompilationResults />
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="deploy" className="mt-6">
+              <Card className="p-6">
+                <div className="space-y-6">
+                  {compiledContract && currentContractId ? (
+                    <ContractDeployer
+                      contractId={currentContractId}
+                      abi={compiledContract.abi}
+                      bytecode={compiledContract.bytecode}
+                    />
+                  ) : (
+                    <div className="text-center p-6 text-muted-foreground">
+                      Compile a contract first to enable deployment
+                    </div>
+                  )}
+
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold mb-4">Deployed Contracts</h3>
+                    <DeployedContracts />
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }
