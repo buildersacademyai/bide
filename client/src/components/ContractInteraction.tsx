@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -20,10 +19,94 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
+// Separate component for function form to properly handle state
+function FunctionForm({ func, contractAddress, abi, onResult }: {
+  func: any;
+  contractAddress: string;
+  abi: any[];
+  onResult: (functionName: string, result: any) => void;
+}) {
+  const [inputValues, setInputValues] = useState<string[]>(Array(func.inputs.length).fill(''));
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleCall = async () => {
+    setIsLoading(true);
+    try {
+      if (!window.ethereum) {
+        throw new Error('MetaMask is not installed');
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(contractAddress, abi, signer);
+
+      // Convert input values based on parameter types
+      const convertedInputs = inputValues.map((value, index) => {
+        const type = func.inputs[index].type;
+        if (type?.startsWith('uint')) {
+          return ethers.parseUnits(value || '0', 0);
+        }
+        return value;
+      });
+
+      const result = await contract[func.name](...convertedInputs);
+
+      // Handle different types of return values
+      let displayResult = result;
+      if (ethers.isAddress(result)) {
+        displayResult = result;
+      } else if (typeof result === 'bigint') {
+        displayResult = result.toString();
+      }
+
+      onResult(func.name, displayResult);
+    } catch (err) {
+      console.error('Contract call error:', err);
+      onResult(func.name, err instanceof Error ? err.message : 'Call failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-4 border rounded-lg mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="text-lg font-semibold">{func.name}</h3>
+        <span className="text-xs px-2 py-1 rounded-full bg-muted">
+          {func.stateMutability}
+        </span>
+      </div>
+
+      {func.inputs.map((input: any, idx: number) => (
+        <div key={idx} className="mb-2">
+          <Label>{input.name} ({input.type})</Label>
+          <Input
+            value={inputValues[idx]}
+            onChange={e => {
+              const newValues = [...inputValues];
+              newValues[idx] = e.target.value;
+              setInputValues(newValues);
+            }}
+            placeholder={input.type}
+          />
+        </div>
+      ))}
+
+      <Button
+        onClick={handleCall}
+        disabled={isLoading}
+        className="mt-2"
+      >
+        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        {func.stateMutability === 'view' ? 'Call' : 'Send'}
+      </Button>
+    </div>
+  );
+}
+
 export function ContractInteraction() {
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState<Record<string, boolean>>({});
 
   // Fetch all deployed contracts
   const { data: contracts, isLoading: isLoadingContracts } = useQuery({
@@ -37,97 +120,8 @@ export function ContractInteraction() {
     }
   });
 
-  const handleCall = async (functionName: string, inputs: any[], contractAddress: string, abi: any[]) => {
-    setLoading(prev => ({ ...prev, [functionName]: true }));
-    try {
-      if (!window.ethereum) {
-        throw new Error('MetaMask is not installed');
-      }
-
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(contractAddress, abi, signer);
-
-      // Convert input values based on parameter types
-      const functionAbi = abi.find(item => item.name === functionName);
-      const convertedInputs = inputs.map((value, index) => {
-        const type = functionAbi?.inputs[index].type;
-        if (type?.startsWith('uint')) {
-          return ethers.parseUnits(value || '0', 0);
-        }
-        return value;
-      });
-
-      const result = await contract[functionName](...convertedInputs);
-
-      // Handle different types of return values
-      let displayResult = result;
-      if (ethers.isAddress(result)) {
-        displayResult = result;
-      } else if (typeof result === 'bigint') {
-        displayResult = result.toString();
-      }
-
-      setResults(prev => ({ ...prev, [functionName]: displayResult }));
-    } catch (err) {
-      console.error('Contract call error:', err);
-      setResults(prev => ({ 
-        ...prev, 
-        [functionName]: err instanceof Error ? err.message : 'Call failed' 
-      }));
-    } finally {
-      setLoading(prev => ({ ...prev, [functionName]: false }));
-    }
-  };
-
-  const renderFunctionForm = (func: any, contractAddress: string, abi: any[]) => {
-    const [inputValues, setInputValues] = useState<string[]>(
-      Array(func.inputs.length).fill('')
-    );
-
-    return (
-      <div key={func.name} className="p-4 border rounded-lg mb-4">
-        <div className="flex items-center gap-2 mb-2">
-          <h3 className="text-lg font-semibold">{func.name}</h3>
-          <span className="text-xs px-2 py-1 rounded-full bg-muted">
-            {func.stateMutability}
-          </span>
-        </div>
-
-        {func.inputs.map((input: any, idx: number) => (
-          <div key={idx} className="mb-2">
-            <Label>{input.name} ({input.type})</Label>
-            <Input
-              value={inputValues[idx]}
-              onChange={e => {
-                const newValues = [...inputValues];
-                newValues[idx] = e.target.value;
-                setInputValues(newValues);
-              }}
-              placeholder={input.type}
-            />
-          </div>
-        ))}
-
-        <Button
-          onClick={() => handleCall(func.name, inputValues, contractAddress, abi)}
-          disabled={loading[func.name]}
-          className="mt-2"
-        >
-          {loading[func.name] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {func.stateMutability === 'view' ? 'Call' : 'Send'}
-        </Button>
-
-        {results[func.name] && (
-          <div className="mt-2">
-            <Label>Result:</Label>
-            <div className="p-2 bg-muted rounded-md font-mono text-sm">
-              {results[func.name]}
-            </div>
-          </div>
-        )}
-      </div>
-    );
+  const handleResult = (functionName: string, result: any) => {
+    setResults(prev => ({ ...prev, [functionName]: result }));
   };
 
   if (isLoadingContracts) {
@@ -147,6 +141,10 @@ export function ContractInteraction() {
       </div>
     );
   }
+
+  const selectedContractData = selectedContract 
+    ? deployedContracts.find(c => c.id.toString() === selectedContract)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -169,74 +167,102 @@ export function ContractInteraction() {
         </Select>
       </div>
 
-      {selectedContract && (
+      {selectedContractData && (
         <div className="space-y-6">
-          {(() => {
-            const contract = deployedContracts.find(
-              (c: any) => c.id.toString() === selectedContract
-            );
-            if (!contract) return null;
-
-            const functions = contract.abi.filter((item: any) => item.type === 'function');
-            const events = contract.abi.filter((item: any) => item.type === 'event');
-            const variables = functions.filter((item: any) => 
-              item.stateMutability === 'view' && 
-              item.inputs.length === 0
-            );
-
-            return (
-              <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="functions">
-                  <AccordionTrigger className="text-lg font-semibold">
-                    Functions ({functions.length})
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4 pt-4">
-                      {functions.map((func: any) => 
-                        renderFunctionForm(func, contract.address, contract.abi)
-                      )}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="events">
-                  <AccordionTrigger className="text-lg font-semibold">
-                    Events ({events.length})
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4 pt-4">
-                      {events.map((event: any) => (
-                        <div key={event.name} className="p-4 border rounded-lg">
-                          <h4 className="font-medium">{event.name}</h4>
-                          <div className="mt-2 text-sm text-muted-foreground">
-                            {event.inputs.map((input: any, idx: number) => (
-                              <div key={idx}>
-                                {input.name} ({input.type})
-                                {input.indexed && ' [indexed]'}
-                              </div>
-                            ))}
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="functions">
+              <AccordionTrigger className="text-lg font-semibold">
+                Functions ({selectedContractData.abi.filter((item: any) => item.type === 'function').length})
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 pt-4">
+                  {selectedContractData.abi
+                    .filter((item: any) => item.type === 'function')
+                    .map((func: any) => (
+                      <div key={func.name}>
+                        <FunctionForm
+                          func={func}
+                          contractAddress={selectedContractData.address}
+                          abi={selectedContractData.abi}
+                          onResult={handleResult}
+                        />
+                        {results[func.name] && (
+                          <div className="mt-2 p-2 bg-muted rounded-md">
+                            <Label>Result:</Label>
+                            <div className="font-mono text-sm">
+                              {results[func.name]}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
 
-                <AccordionItem value="variables">
-                  <AccordionTrigger className="text-lg font-semibold">
-                    View Variables ({variables.length})
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4 pt-4">
-                      {variables.map((variable: any) => 
-                        renderFunctionForm(variable, contract.address, contract.abi)
-                      )}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            );
-          })()}
+            <AccordionItem value="events">
+              <AccordionTrigger className="text-lg font-semibold">
+                Events ({selectedContractData.abi.filter((item: any) => item.type === 'event').length})
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 pt-4">
+                  {selectedContractData.abi
+                    .filter((item: any) => item.type === 'event')
+                    .map((event: any) => (
+                      <div key={event.name} className="p-4 border rounded-lg">
+                        <h4 className="font-medium">{event.name}</h4>
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          {event.inputs.map((input: any, idx: number) => (
+                            <div key={idx}>
+                              {input.name} ({input.type})
+                              {input.indexed && ' [indexed]'}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="variables">
+              <AccordionTrigger className="text-lg font-semibold">
+                View Variables ({selectedContractData.abi.filter((item: any) => 
+                  item.type === 'function' && 
+                  item.stateMutability === 'view' && 
+                  item.inputs.length === 0
+                ).length})
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 pt-4">
+                  {selectedContractData.abi
+                    .filter((item: any) => 
+                      item.type === 'function' && 
+                      item.stateMutability === 'view' && 
+                      item.inputs.length === 0
+                    )
+                    .map((variable: any) => (
+                      <div key={variable.name}>
+                        <FunctionForm
+                          func={variable}
+                          contractAddress={selectedContractData.address}
+                          abi={selectedContractData.abi}
+                          onResult={handleResult}
+                        />
+                        {results[variable.name] && (
+                          <div className="mt-2 p-2 bg-muted rounded-md">
+                            <Label>Value:</Label>
+                            <div className="font-mono text-sm">
+                              {results[variable.name]}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
       )}
     </div>
