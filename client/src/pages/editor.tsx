@@ -13,7 +13,6 @@ import { DeployedContracts } from '@/components/DeployedContracts';
 import { ContractCompiler } from '@/components/ContractCompiler';
 import { ContractDeployer } from '@/components/ContractDeployer';
 import { UserProfile } from '@/components/UserProfile';
-import { Footer } from '@/components/Footer';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -140,8 +139,8 @@ export default function Editor() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="flex flex-1 h-[calc(100vh-4rem)]">
+    <div className="flex min-h-screen bg-background">
+      <div className="flex flex-1">
         <FileExplorer onFileSelect={handleFileSelect} />
 
         <div className="flex-1 p-4 space-y-8 overflow-y-auto">
@@ -245,7 +244,6 @@ export default function Editor() {
           </Tabs>
         </div>
       </div>
-      <Footer />
     </div>
   );
 }

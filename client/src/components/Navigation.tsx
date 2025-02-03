@@ -7,12 +7,12 @@ export function Navigation() {
   const isAppPage = location === "/app";
 
   return (
-    <nav className="border-b">
+    <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <Link href="/">
-              <a className="flex items-center">
+              <a className="flex items-center transition-colors hover:text-primary">
                 <svg
                   className="h-8 w-8 text-primary"
                   viewBox="0 0 24 24"
@@ -33,20 +33,20 @@ export function Navigation() {
 
           <div className="flex items-center gap-4">
             <Link href="/about">
-              <a className="text-sm font-medium hover:text-primary">
+              <a className="text-sm font-medium transition-colors hover:text-primary">
                 About Us
               </a>
             </Link>
-            
+
             {!isAppPage && (
               <Link href="/app">
-                <Button>
+                <Button className="bg-primary hover:bg-primary/90">
                   Launch App
                 </Button>
               </Link>
             )}
 
-            <UserProfile />
+            <UserProfile address={undefined} />
           </div>
         </div>
       </div>
