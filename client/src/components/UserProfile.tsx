@@ -24,30 +24,28 @@ export function UserProfile({ address }: { address: string }) {
     window.location.reload();
   };
 
-  // Fetch wallet info when dropdown opens
-  const fetchWalletInfo = async () => {
-    if (!address || !isOpen) return;
-
-    setIsLoading(true);
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-
-      // Get balance
-      const balance = await provider.getBalance(address);
-      setBalance(ethers.formatEther(balance));
-
-      // Get network
-      const network = await provider.getNetwork();
-      setNetwork(network.name);
-    } catch (error) {
-      console.error('Error fetching wallet info:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fetch wallet info when dropdown opens
   useEffect(() => {
+    async function fetchWalletInfo() {
+      if (!address || !isOpen || !window.ethereum) return;
+
+      setIsLoading(true);
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+
+        // Get balance
+        const balance = await provider.getBalance(address);
+        setBalance(ethers.formatEther(balance));
+
+        // Get network
+        const network = await provider.getNetwork();
+        setNetwork(network.name);
+      } catch (error) {
+        console.error('Error fetching wallet info:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
     if (isOpen) {
       fetchWalletInfo();
     }
