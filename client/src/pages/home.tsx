@@ -1,139 +1,64 @@
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { connectWallet, getConnectedAccount } from '@/lib/web3';
-import { ContractEditor } from '@/components/ContractEditor';
-import { ContractCompiler } from '@/components/ContractCompiler';
-import { ContractDeployer } from '@/components/ContractDeployer';
-import { ContractInteraction } from '@/components/ContractInteraction';
-import { UserProfile } from '@/components/UserProfile';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-
-const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract SimpleStorage {
-    uint256 private value;
-
-    function setValue(uint256 _value) public {
-        value = _value;
-    }
-
-    function getValue() public view returns (uint256) {
-        return value;
-    }
-}`;
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { ArrowRight, Code, Zap, Shield } from "lucide-react";
 
 export default function Home() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [sourceCode, setSourceCode] = useState(DEFAULT_CONTRACT);
-  const [abi, setAbi] = useState<any[]>([]);
-  const [bytecode, setBytecode] = useState('');
-  const [contractAddress, setContractAddress] = useState('');
-
-  const { data: contracts } = useQuery<any>({ 
-    queryKey: ['/api/contracts']
-  });
-
-  const { data: account, isLoading: isWalletLoading } = useQuery({ 
-    queryKey: ['wallet'],
-    queryFn: getConnectedAccount,
-    refetchOnWindowFocus: true
-  });
-
-  const handleConnect = async () => {
-    try {
-      await connectWallet();
-      await queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      toast({
-        title: "Connected to wallet",
-        description: "Successfully connected to MetaMask",
-      });
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Connection failed",
-        description: err instanceof Error ? err.message : "Failed to connect wallet",
-      });
-    }
-  };
-
-  const handleCompileSuccess = (abi: any[], bytecode: string) => {
-    setAbi(abi);
-    setBytecode(bytecode);
-    toast({
-      title: "Compilation successful",
-      description: "Contract compiled successfully",
-    });
-  };
-
-  const handleDeploySuccess = (address: string) => {
-    setContractAddress(address);
-    toast({
-      title: "Deployment successful",
-      description: `Contract deployed at ${address}`,
-    });
-  };
-
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Blockchain IDE</h1>
-        <div className="flex items-center gap-4">
-          {!isWalletLoading && !account && (
-            <Button onClick={handleConnect}>
-              Connect Wallet
-            </Button>
-          )}
-          <UserProfile />
+    <div className="container mx-auto px-4">
+      {/* Hero Section */}
+      <div className="py-20 text-center">
+        <h1 className="text-5xl font-bold mb-6">
+          Build Smart Contracts with Confidence
+        </h1>
+        <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          A powerful, web-based IDE for blockchain development. Write, compile, and deploy
+          smart contracts seamlessly.
+        </p>
+        <Link href="/app">
+          <Button size="lg" className="gap-2">
+            Start Building <ArrowRight className="h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
+
+      {/* Features Section */}
+      <div className="grid md:grid-cols-3 gap-8 py-16">
+        <div className="p-6 border rounded-lg">
+          <Code className="h-10 w-10 mb-4 text-primary" />
+          <h3 className="text-xl font-semibold mb-2">Smart Editor</h3>
+          <p className="text-muted-foreground">
+            Advanced code editor with Solidity syntax highlighting and real-time error detection.
+          </p>
+        </div>
+
+        <div className="p-6 border rounded-lg">
+          <Zap className="h-10 w-10 mb-4 text-primary" />
+          <h3 className="text-xl font-semibold mb-2">Instant Compilation</h3>
+          <p className="text-muted-foreground">
+            Compile your contracts directly in the browser with immediate feedback.
+          </p>
+        </div>
+
+        <div className="p-6 border rounded-lg">
+          <Shield className="h-10 w-10 mb-4 text-primary" />
+          <h3 className="text-xl font-semibold mb-2">Secure Deployment</h3>
+          <p className="text-muted-foreground">
+            Deploy contracts securely with MetaMask integration and contract verification.
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div>
-          <ContractEditor value={sourceCode} onChange={setSourceCode} />
-          <div className="mt-4">
-            <ContractCompiler
-              sourceCode={sourceCode}
-              onCompileSuccess={handleCompileSuccess}
-            />
-          </div>
-          {abi.length > 0 && (
-            <div className="mt-4">
-              <ContractDeployer
-                abi={abi}
-                bytecode={bytecode}
-                onDeploySuccess={handleDeploySuccess}
-              />
-            </div>
-          )}
-        </div>
-
-        <div>
-          {contractAddress && (
-            <ContractInteraction address={contractAddress} abi={abi} />
-          )}
-
-          {contracts?.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-xl font-bold mb-4">Deployed Contracts</h2>
-              {contracts.map((contract: any) => (
-                <div 
-                  key={contract.id}
-                  className="p-4 border rounded-lg mb-4 cursor-pointer hover:bg-gray-50"
-                  onClick={() => {
-                    setAbi(contract.abi);
-                    setContractAddress(contract.address);
-                  }}
-                >
-                  <p className="font-medium">{contract.name}</p>
-                  <p className="text-sm text-gray-500">{contract.address}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* CTA Section */}
+      <div className="py-16 text-center border-t">
+        <h2 className="text-3xl font-bold mb-4">
+          Ready to Start Building?
+        </h2>
+        <p className="text-xl text-muted-foreground mb-8">
+          Join developers worldwide who are building the future of blockchain.
+        </p>
+        <Link href="/app">
+          <Button size="lg">Launch IDE</Button>
+        </Link>
       </div>
     </div>
   );
