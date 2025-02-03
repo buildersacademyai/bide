@@ -7,6 +7,7 @@ import { ContractDeployer } from '@/components/ContractDeployer';
 import { ContractInteraction } from '@/components/ContractInteraction';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { Copy, CheckCircle2 } from 'lucide-react';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -30,6 +31,7 @@ export default function Editor() {
   const [abi, setAbi] = useState<any[]>([]);
   const [bytecode, setBytecode] = useState('');
   const [contractAddress, setContractAddress] = useState('');
+  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
 
   const { data: contracts } = useQuery<any>({ 
     queryKey: ['/api/contracts']
@@ -73,6 +75,14 @@ export default function Editor() {
       title: "Deployment successful",
       description: `Contract deployed at ${address}`,
     });
+  };
+
+  const copyToClipboard = async (text: string, id: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedStates(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => {
+      setCopiedStates(prev => ({ ...prev, [id]: false }));
+    }, 2000);
   };
 
   return (
@@ -124,14 +134,53 @@ export default function Editor() {
               {contracts.map((contract: any) => (
                 <div 
                   key={contract.id}
-                  className="p-4 border rounded-lg mb-4 cursor-pointer hover:bg-accent"
-                  onClick={() => {
-                    setAbi(contract.abi);
-                    setContractAddress(contract.address);
-                  }}
+                  className="p-4 border rounded-lg mb-4"
                 >
-                  <p className="font-medium">{contract.name}</p>
-                  <p className="text-sm text-muted-foreground">{contract.address}</p>
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="font-medium">{contract.name || 'Unnamed Contract'}</p>
+                      <p className="text-sm text-muted-foreground truncate">{contract.address || 'Not deployed'}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setAbi(contract.abi);
+                        setContractAddress(contract.address);
+                      }}
+                    >
+                      Interact
+                    </Button>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="flex gap-2"
+                      onClick={() => copyToClipboard(JSON.stringify(contract.abi), `abi-${contract.id}`)}
+                    >
+                      {copiedStates[`abi-${contract.id}`] ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                      Copy ABI
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="flex gap-2"
+                      onClick={() => copyToClipboard(contract.bytecode, `bytecode-${contract.id}`)}
+                    >
+                      {copiedStates[`bytecode-${contract.id}`] ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                      Copy Bytecode
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
