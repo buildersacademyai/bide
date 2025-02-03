@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { AlertCircle, Loader2, Terminal } from 'lucide-react';
-import { compileSolidity } from '@/lib/compiler';
 import { apiRequest } from '@/lib/queryClient';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -35,12 +34,17 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
         description: "Please wait while the contract is being compiled...",
       });
 
-      const result = await compileSolidity(sourceCode);
+      const response = await fetch('/api/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceCode })
+      });
 
-      if (result.errors?.length) {
-        const errors = result.errors.filter(e => e.severity === 'error');
-        if (errors.length > 0) {
-          setError(errors.map(e => e.formattedMessage).join('\n'));
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data.errors) {
+          setError(data.errors.map((e: any) => e.formattedMessage).join('\n'));
           toast({
             variant: "destructive",
             title: "Compilation failed",
@@ -48,19 +52,8 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
           });
           return;
         }
+        throw new Error(data.message || 'Compilation failed');
       }
-
-      // Extract contract name from source code
-      const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
-      const contractName = contractNameMatch ? contractNameMatch[1] : 'Contract';
-
-      // Save compilation result to database
-      await apiRequest('POST', '/api/contracts', {
-        name: contractName,
-        sourceCode: sourceCode,
-        abi: result.abi,
-        bytecode: result.bytecode
-      });
 
       // Refresh the contracts list
       await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
@@ -68,11 +61,11 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       // Show success message
       toast({
         title: "Compilation successful",
-        description: `${contractName} compiled successfully`,
+        description: `Contract compiled successfully`,
       });
 
       // Call success callback with the results
-      onCompileSuccess(result.abi, result.bytecode);
+      onCompileSuccess(data.abi, data.bytecode);
     } catch (err) {
       console.error('Compilation error:', err);
       setError(err instanceof Error ? err.message : 'Compilation failed');

@@ -3,9 +3,70 @@ import { createServer, type Server } from "http";
 import { db } from "@db";
 import { contracts } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import solc from 'solc';
 
 export function registerRoutes(app: Express): Server {
   // Contract CRUD operations
+  app.post("/api/compile", async (req, res) => {
+    try {
+      const sourceCode = req.body.sourceCode;
+
+      if (!sourceCode) {
+        return res.status(400).json({ message: "Source code is required" });
+      }
+
+      const input = {
+        language: 'Solidity',
+        sources: {
+          'Contract.sol': { content: sourceCode },
+        },
+        settings: { 
+          outputSelection: { '*': { '*': ['abi', 'evm.bytecode'] } } 
+        },
+      };
+
+      const output = JSON.parse(solc.compile(JSON.stringify(input)));
+
+      if (output.errors) {
+        const errors = output.errors.filter((e: any) => e.severity === 'error');
+        if (errors.length > 0) {
+          return res.status(400).json({ errors: output.errors });
+        }
+      }
+
+      // Get the contract name from source code
+      const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
+      const contractName = contractNameMatch ? contractNameMatch[1] : 'Contract';
+
+      // Get the compiled contract
+      const contract = output.contracts['Contract.sol'][contractName];
+
+      // Save to database
+      const [savedContract] = await db.insert(contracts)
+        .values({
+          name: contractName,
+          sourceCode: sourceCode,
+          abi: contract.abi,
+          bytecode: contract.evm.bytecode.object,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      res.json({
+        abi: contract.abi,
+        bytecode: contract.evm.bytecode.object,
+        contract: savedContract
+      });
+    } catch (err) {
+      console.error('Compilation error:', err);
+      res.status(500).json({ 
+        message: "Failed to compile contract",
+        details: err instanceof Error ? err.message : String(err)
+      });
+    }
+  });
+
   app.post("/api/contracts", async (req, res) => {
     try {
       const newContract = {
