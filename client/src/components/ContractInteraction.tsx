@@ -39,7 +39,7 @@ export function ContractInteraction({ address, abi }: Props) {
     return (
       <div key={func.name} className="p-4 border rounded-lg mb-4">
         <h3 className="text-lg font-semibold mb-2">{func.name}</h3>
-        
+
         {func.inputs.map((input: any, idx: number) => (
           <div key={idx} className="mb-2">
             <Label>{input.name} ({input.type})</Label>
@@ -67,7 +67,9 @@ export function ContractInteraction({ address, abi }: Props) {
         {results[func.name] && (
           <div className="mt-2">
             <Label>Result:</Label>
-            <div className="p-2 bg-gray-100 rounded">{results[func.name]}</div>
+            <div className="p-2 bg-muted rounded-md font-mono text-sm">
+              {results[func.name]}
+            </div>
           </div>
         )}
       </div>

@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { Loader2, Code2, Rocket, Terminal } from 'lucide-react';
+import { Loader2, Code2, Rocket, Terminal, History, Pencil } from 'lucide-react';
 import { CompilationResults } from '@/components/CompilationResults';
 import { DeployedContracts } from '@/components/DeployedContracts';
 import { ContractCompiler } from '@/components/ContractCompiler';
 import { ContractDeployer } from '@/components/ContractDeployer';
 import { UserProfile } from '@/components/UserProfile';
+import { TransactionHistory } from '@/components/TransactionHistory';
+import { ContractInteraction } from '@/components/ContractInteraction';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -37,6 +39,7 @@ export default function Editor() {
   const [compiledContract, setCompiledContract] = useState<{
     abi: any[];
     bytecode: string;
+    address?: string;
   } | null>(null);
   const [isDeploying, setIsDeploying] = useState(false);
 
@@ -58,7 +61,8 @@ export default function Editor() {
       if (contract.abi && contract.bytecode) {
         setCompiledContract({
           abi: contract.abi,
-          bytecode: contract.bytecode
+          bytecode: contract.bytecode,
+          address: contract.address
         });
       } else {
         setCompiledContract(null);
@@ -126,6 +130,7 @@ export default function Editor() {
         title: "Contract deployed",
         description: `Successfully deployed to ${address}`,
       });
+      setCompiledContract({...compiledContract, address})
     } catch (err) {
       console.error('Deployment error:', err);
       toast({
@@ -169,7 +174,7 @@ export default function Editor() {
           </div>
 
           <Tabs defaultValue="editor" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+            <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
               <TabsTrigger value="editor" className="gap-2">
                 <Code2 className="w-4 h-4" />
                 Editor
@@ -181,6 +186,14 @@ export default function Editor() {
               <TabsTrigger value="deploy" className="gap-2">
                 <Rocket className="w-4 h-4" />
                 Deploy
+              </TabsTrigger>
+              <TabsTrigger value="transactions" className="gap-2">
+                <History className="w-4 h-4" />
+                Transactions
+              </TabsTrigger>
+              <TabsTrigger value="interact" className="gap-2">
+                <Pencil className="w-4 h-4" />
+                Interact
               </TabsTrigger>
             </TabsList>
 
@@ -238,6 +251,34 @@ export default function Editor() {
                     <h3 className="text-lg font-semibold mb-4">Deployed Contracts</h3>
                     <DeployedContracts />
                   </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="transactions" className="mt-6">
+              <Card className="p-6">
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4">Transaction History</h2>
+                    <TransactionHistory address={account} />
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="interact" className="mt-6">
+              <Card className="p-6">
+                <div className="space-y-6">
+                  {compiledContract && currentContractId ? (
+                    <ContractInteraction
+                      address={compiledContract.address}
+                      abi={compiledContract.abi}
+                    />
+                  ) : (
+                    <div className="text-center p-6 text-muted-foreground">
+                      Deploy a contract first to enable interaction
+                    </div>
+                  )}
                 </div>
               </Card>
             </TabsContent>

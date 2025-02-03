@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Copy, Heart, Check, Mail, Twitter, Github } from 'lucide-react';
+import { Copy, Heart, Check, Mail, Linkedin, Github } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export function Footer() {
@@ -20,12 +20,26 @@ export function Footer() {
 
   return (
     <footer className="w-full mx-auto border-t py-6 bg-background flex flex-col">
-      <div className="container flex flex-col items-center justify-between gap-4 md:h-16 md:flex-row md:py-0">
+      <div className="container mx-auto flex flex-col items-center justify-between gap-4 md:h-16 md:flex-row md:py-0">
         <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
           <p className="text-sm text-muted-foreground flex items-center gap-1">
-            Made with <Heart className="h-4 w-4 text-red-500 animate-pulse" /> by BA Team
+            Made with ❤️ by BA Team
           </p>
           <span className="hidden md:inline text-muted-foreground">•</span>
+         
+        </div>
+
+        <div className="flex flex-col items-center gap-4 md:flex-row md:gap-6">
+          <div className="flex gap-4">
+            <Button variant="ghost" size="icon" onClick={() => window.open('https://www.linkedin.com/company/buildersacademy', '_blank')}>
+              <Linkedin className="h-4 w-4" />
+              <span className="sr-only">Twitter</span>
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => window.open('https://github.com/buildersacademyai', '_blank')}>
+              <Github className="h-4 w-4" />
+              <span className="sr-only">GitHub</span>
+            </Button>
+          </div>
           <Button 
             variant="ghost" 
             size="sm" 
@@ -40,19 +54,6 @@ export function Footer() {
               <Copy className="h-4 w-4" />
             )}
           </Button>
-        </div>
-
-        <div className="flex flex-col items-center gap-4 md:flex-row md:gap-6">
-          <div className="flex gap-4">
-            <Button variant="ghost" size="icon" onClick={() => window.open('https://twitter.com/buildersacademy', '_blank')}>
-              <Twitter className="h-4 w-4" />
-              <span className="sr-only">Twitter</span>
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => window.open('https://github.com/buildersacademy', '_blank')}>
-              <Github className="h-4 w-4" />
-              <span className="sr-only">GitHub</span>
-            </Button>
-          </div>
         </div>
       </div>
       <p className="text-center text-sm text-muted-foreground mt-4">
