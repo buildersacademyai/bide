@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Loader2, Copy, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { compileSolidity } from '@/lib/compiler';
 import { apiRequest } from '@/lib/queryClient';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface Props {
   sourceCode: string;
@@ -13,44 +14,53 @@ interface Props {
 export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
   const [compiling, setCompiling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedABI, setCopiedABI] = useState(false);
-  const [copiedBytecode, setCopiedBytecode] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleCompile = async () => {
+    if (!sourceCode.trim()) {
+      setError('Source code cannot be empty');
+      return;
+    }
+
     setCompiling(true);
     setError(null);
 
     try {
       const result = await compileSolidity(sourceCode);
-      if (result.errors?.length) {
-        setError(result.errors[0].formattedMessage);
+
+      // Check for compilation errors
+      if (result.errors?.some(e => e.severity === 'error')) {
+        setError(result.errors.map(e => e.formattedMessage).join('\n'));
+        return;
+      }
+
+      if (!result.abi || !result.bytecode) {
+        setError('Compilation failed: Invalid contract output');
         return;
       }
 
       // Save compilation result to database
-      await apiRequest('POST', '/api/contracts', {
-        name: 'New Contract',
-        sourceCode,
-        abi: result.abi,
-        bytecode: result.bytecode
-      });
+      try {
+        await apiRequest('POST', '/api/contracts', {
+          name: 'New Contract',
+          sourceCode,
+          abi: result.abi,
+          bytecode: result.bytecode
+        });
 
-      onCompileSuccess(result.abi, result.bytecode);
+        // Invalidate contracts query to refresh the list
+        await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+
+        // Call success callback
+        onCompileSuccess(result.abi, result.bytecode);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to save contract');
+        return;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Compilation failed');
     } finally {
       setCompiling(false);
-    }
-  };
-
-  const copyToClipboard = async (text: string, type: 'abi' | 'bytecode') => {
-    await navigator.clipboard.writeText(text);
-    if (type === 'abi') {
-      setCopiedABI(true);
-      setTimeout(() => setCopiedABI(false), 2000);
-    } else {
-      setCopiedBytecode(true);
-      setTimeout(() => setCopiedBytecode(false), 2000);
     }
   };
 
@@ -68,7 +78,9 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription className="whitespace-pre-wrap font-mono text-sm">
+            {error}
+          </AlertDescription>
         </Alert>
       )}
     </div>
