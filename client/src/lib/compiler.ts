@@ -23,31 +23,22 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
           '*': {
             '*': ['*']
           }
-        },
-        optimizer: {
-          enabled: true,
-          runs: 200
         }
       }
     };
 
     const output = JSON.parse(wrapper(JSON.stringify(input)));
 
+    // Check for compilation errors
     if (output.errors?.length) {
-      const errors = output.errors
-        .filter((e: any) => e.severity === 'error')
-        .map((e: any) => e.formattedMessage);
-
-      if (errors.length > 0) {
-        return { 
-          abi: [], 
-          bytecode: '', 
-          errors: output.errors 
-        };
-      }
+      return { 
+        abi: [], 
+        bytecode: '', 
+        errors: output.errors 
+      };
     }
 
-    // Get the contract from the output
+    // Get the first contract from the output
     const contractFile = Object.keys(output.contracts['Contract.sol'])[0];
     const contract = output.contracts['Contract.sol'][contractFile];
 
@@ -70,23 +61,14 @@ function loadBrowserSolc(): Promise<any> {
   }
 
   solcPromise = new Promise((resolve, reject) => {
-    // Check if Module is already loaded
-    // @ts-ignore
-    if (window.Module && window.Module.cwrap) {
-      // @ts-ignore
-      const compile = window.Module.cwrap('compileStandard', 'string', ['string']);
-      resolve(compile);
-      return;
-    }
-
     const script = document.createElement('script');
     script.src = `https://binaries.soliditylang.org/bin/soljson-${SOLC_VERSION}.js`;
     script.async = true;
 
     script.onload = () => {
-      // Wait for module initialization with longer timeout
+      // Wait for module initialization
       let attempts = 0;
-      const maxAttempts = 50; // 10 seconds total
+      const maxAttempts = 50;
       const checkInterval = setInterval(() => {
         attempts++;
         // @ts-ignore
@@ -103,7 +85,7 @@ function loadBrowserSolc(): Promise<any> {
     };
 
     script.onerror = () => {
-      solcPromise = null; // Reset promise on error
+      solcPromise = null;
       reject(new Error('Failed to load Solidity compiler'));
     };
 

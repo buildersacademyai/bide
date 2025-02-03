@@ -29,32 +29,20 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
     setError(null);
 
     try {
-      // Extract contract name from source code
-      const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
-      if (!contractNameMatch) {
-        throw new Error('Could not find contract name in source code');
-      }
-      const contractName = contractNameMatch[1];
-
-      // Compile the contract
+      // Compile the contract using browser-based solc
       const result = await compileSolidity(sourceCode);
 
-      // Handle compilation errors
       if (result.errors?.length) {
-        const errorMessages = result.errors
-          .filter(e => e.severity === 'error')
-          .map(e => e.formattedMessage);
-
-        if (errorMessages.length > 0) {
-          setError(errorMessages.join('\n'));
-          throw new Error('Compilation failed with errors');
+        const errors = result.errors.filter(e => e.severity === 'error');
+        if (errors.length > 0) {
+          setError(errors.map(e => e.formattedMessage).join('\n'));
+          return;
         }
       }
 
       // Save compilation result to database
       await apiRequest('POST', '/api/contracts', {
-        name: contractName,
-        sourceCode,
+        name: 'CompiledContract',
         abi: result.abi,
         bytecode: result.bytecode
       });
@@ -65,16 +53,14 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       // Show success message
       toast({
         title: "Compilation successful",
-        description: `Contract ${contractName} compiled and saved successfully`,
+        description: "Contract compiled and saved successfully",
       });
 
-      // Call success callback
+      // Call success callback with the results
       onCompileSuccess(result.abi, result.bytecode);
     } catch (err) {
       console.error('Compilation error:', err);
-      if (!error) { // Only set error if not already set from compilation errors
-        setError(err instanceof Error ? err.message : 'Compilation failed');
-      }
+      setError(err instanceof Error ? err.message : 'Compilation failed');
 
       toast({
         variant: "destructive",
