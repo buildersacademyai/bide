@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,7 +47,7 @@ export function UserProfile({ address }: { address: string }) {
   };
 
   // Fetch wallet info when dropdown opens
-  useState(() => {
+  useEffect(() => {
     if (isOpen) {
       fetchWalletInfo();
     }
