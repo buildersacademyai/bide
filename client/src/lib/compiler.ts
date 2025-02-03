@@ -1,47 +1,6 @@
-import { type } from "os";
+import type { CompileResult } from './types';
 
-export interface CompileResult {
-  abi: any[];
-  bytecode: string;
-  errors?: any[];
-}
-
-let solcjs: any = null;
-
-async function loadCompiler(): Promise<any> {
-  if (solcjs) return solcjs;
-
-  try {
-    // Create a script element to load solc
-    const script = document.createElement('script');
-    script.src = 'https://binaries.soliditylang.org/bin/soljson-v0.8.19+commit.7dd6d404.js';
-    script.async = true;
-
-    // Wait for the script to load
-    await new Promise((resolve, reject) => {
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-
-    // Wait for Module to be defined by the solc script
-    while (typeof (window as any).Module === 'undefined') {
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-
-    // Initialize the compiler
-    return new Promise((resolve) => {
-      (window as any).Module.onRuntimeInitialized = () => {
-        const soljson = (window as any).Module;
-        solcjs = soljson.cwrap('solidity_compile', 'string', ['string']);
-        resolve(solcjs);
-      };
-    });
-  } catch (error) {
-    console.error('Error loading compiler:', error);
-    throw new Error('Failed to load Solidity compiler');
-  }
-}
+const SOLC_VERSION = 'v0.8.19+commit.7dd6d404';
 
 export async function compileSolidity(source: string): Promise<CompileResult> {
   try {
@@ -49,29 +8,27 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
       throw new Error('Source code is empty');
     }
 
-    const compiler = await loadCompiler();
+    // Load the Solidity compiler
+    const solc = await loadSolcJs();
 
-    const input = JSON.stringify({
+    const input = {
       language: 'Solidity',
       sources: {
-        'contract.sol': {
+        'Contract.sol': {
           content: source
         }
       },
       settings: {
         outputSelection: {
           '*': {
-            '*': ['abi', 'evm.bytecode']
+            '*': ['*']
           }
-        },
-        optimizer: {
-          enabled: true,
-          runs: 200
         }
       }
-    });
+    };
 
-    const output = JSON.parse(compiler(input));
+    // Compile using loaded compiler
+    const output = JSON.parse(solc.compile(JSON.stringify(input)));
 
     if (output.errors?.length) {
       const errors = output.errors.filter((e: any) => e.severity === 'error');
@@ -85,8 +42,8 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
     }
 
     // Get the contract name from the output
-    const contractFile = Object.keys(output.contracts['contract.sol'])[0];
-    const contract = output.contracts['contract.sol'][contractFile];
+    const contractFile = Object.keys(output.contracts['Contract.sol'])[0];
+    const contract = output.contracts['Contract.sol'][contractFile];
 
     return {
       abi: contract.abi,
@@ -97,4 +54,36 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
     console.error('Compilation error:', error);
     throw new Error(`Compilation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+async function loadSolcJs() {
+  const solcjs = await new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `https://binaries.soliditylang.org/bin/soljson-${SOLC_VERSION}.js`;
+    script.onload = () => {
+      const solc = (window as any).Module;
+
+      // Wait for the Module to be fully initialized
+      if (solc.default) {
+        resolve(solc.default);
+      } else {
+        const checkInterval = setInterval(() => {
+          if (solc.default) {
+            clearInterval(checkInterval);
+            resolve(solc.default);
+          }
+        }, 50);
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load Solidity compiler'));
+    document.head.appendChild(script);
+  });
+
+  return solcjs;
+}
+
+export interface CompileResult {
+  abi: any[];
+  bytecode: string;
+  errors?: any[];
 }

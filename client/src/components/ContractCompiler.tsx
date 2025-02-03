@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card } from '@/components/ui/card';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { compileSolidity } from '@/lib/compiler';
 import { apiRequest } from '@/lib/queryClient';
@@ -88,7 +89,7 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
   };
 
   return (
-    <div className="space-y-4">
+    <Card className="p-4">
       <Button 
         onClick={handleCompile} 
         disabled={compiling}
@@ -99,13 +100,13 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
       </Button>
 
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="mt-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="whitespace-pre-wrap font-mono text-sm mt-2">
             {error}
           </AlertDescription>
         </Alert>
       )}
-    </div>
+    </Card>
   );
 }
