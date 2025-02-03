@@ -12,7 +12,7 @@ import { CompilationResults } from '@/components/CompilationResults';
 import { DeployedContracts } from '@/components/DeployedContracts';
 import { ContractCompiler } from '@/components/ContractCompiler';
 import { ContractDeployer } from '@/components/ContractDeployer';
-import { WalletInfo } from '@/components/WalletInfo';
+import { UserProfile } from '@/components/UserProfile';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -136,17 +136,17 @@ export default function Editor() {
             </p>
           </div>
 
-          {!isWalletLoading && !account ? (
-            <Button onClick={handleConnect} className="gap-2">
-              <Terminal className="w-4 h-4" />
-              Connect Wallet
-            </Button>
-          ) : account ? (
-            <WalletInfo address={account} />
+          {!isWalletLoading ? (
+            !account ? (
+              <Button onClick={handleConnect} className="gap-2">
+                <Terminal className="w-4 h-4" />
+                Connect Wallet
+              </Button>
+            ) : (
+              <UserProfile address={account} />
+            )
           ) : (
-            <div className="text-sm text-muted-foreground">
-              Loading wallet...
-            </div>
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           )}
         </div>
 
