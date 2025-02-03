@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,14 +15,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Folder, FileCode, ChevronRight, ChevronDown, Plus } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Folder, FileCode, ChevronDown, Plus, Pencil, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-interface FileSystemItem {
-  id: string;
+interface Contract {
+  id: number;
   name: string;
   type: 'file' | 'folder';
-  content?: string;
-  children?: FileSystemItem[];
+  path: string;
+  parentId: number | null;
+  sourceCode?: string;
 }
 
 interface Props {
@@ -29,38 +42,98 @@ interface Props {
 }
 
 export function FileExplorer({ onFileSelect }: Props) {
-  const [items, setItems] = useState<FileSystemItem[]>([
-    {
-      id: '1',
-      name: 'contracts',
-      type: 'folder',
-      children: [
-        {
-          id: '2',
-          name: 'SimpleStorage.sol',
-          type: 'file',
-          content: `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract SimpleStorage {
-    uint256 private value;
-
-    function setValue(uint256 _value) public {
-        value = _value;
-    }
-
-    function getValue() public view returns (uint256) {
-        return value;
-    }
-}`
-        }
-      ]
-    }
-  ]);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['1']));
   const [newItemName, setNewItemName] = useState('');
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<Contract | null>(null);
+  const [itemToRename, setItemToRename] = useState<Contract | null>(null);
+
+  // Fetch contracts
+  const { data: contracts = [] } = useQuery<Contract[]>({
+    queryKey: ['/api/contracts'],
+  });
+
+  // Create contract mutation
+  const createMutation = useMutation({
+    mutationFn: async (newContract: Partial<Contract>) => {
+      const res = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newContract),
+      });
+      if (!res.ok) throw new Error('Failed to create item');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      toast({
+        title: `${isCreatingFile ? 'File' : 'Folder'} created`,
+        description: `Successfully created ${newItemName}`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to create item",
+        description: error.message,
+      });
+    },
+  });
+
+  // Update contract mutation
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Contract> }) => {
+      const res = await fetch(`/api/contracts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update item');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      toast({
+        title: "Item updated",
+        description: "Successfully updated the item",
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update item",
+        description: error.message,
+      });
+    },
+  });
+
+  // Delete contract mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/contracts/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete item');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      toast({
+        title: "Item deleted",
+        description: "Successfully deleted the item",
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to delete item",
+        description: error.message,
+      });
+    },
+  });
 
   const toggleFolder = (id: string) => {
     const newExpanded = new Set(expandedFolders);
@@ -72,82 +145,73 @@ contract SimpleStorage {
     setExpandedFolders(newExpanded);
   };
 
-  const handleFileCreate = (parentId: string | null = null) => {
+  const handleFileCreate = async (parentId: string | null = null) => {
     if (!newItemName) return;
 
-    const newFile: FileSystemItem = {
-      id: Date.now().toString(),
-      name: newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`,
-      type: 'file',
-      content: `// SPDX-License-Identifier: MIT
+    const path = parentId ? `${parentId}/${newItemName}` : newItemName;
+    const sourceCode = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 contract ${newItemName.replace('.sol', '')} {
     // Your contract code here
-}`
-    };
+}`;
 
-    setItems(prevItems => {
-      const addToItems = (items: FileSystemItem[]): FileSystemItem[] => {
-        return items.map(item => {
-          if (item.type === 'folder' && (item.id === parentId || parentId === null)) {
-            return {
-              ...item,
-              children: [...(item.children || []), newFile]
-            };
-          } else if (item.type === 'folder' && item.children) {
-            return {
-              ...item,
-              children: addToItems(item.children)
-            };
-          }
-          return item;
-        });
-      };
-      return addToItems(prevItems);
+    await createMutation.mutateAsync({
+      name: newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`,
+      type: 'file',
+      path,
+      parentId: parentId ? parseInt(parentId) : null,
+      sourceCode,
     });
 
     setNewItemName('');
-    setIsCreatingFile(false);
+    setSelectedFolder(null);
   };
 
-  const handleFolderCreate = (parentId: string | null = null) => {
+  const handleFolderCreate = async (parentId: string | null = null) => {
     if (!newItemName) return;
 
-    const newFolder: FileSystemItem = {
-      id: Date.now().toString(),
+    const path = parentId ? `${parentId}/${newItemName}` : newItemName;
+
+    await createMutation.mutateAsync({
       name: newItemName,
       type: 'folder',
-      children: []
-    };
-
-    setItems(prevItems => {
-      const addToItems = (items: FileSystemItem[]): FileSystemItem[] => {
-        return items.map(item => {
-          if (item.type === 'folder' && (item.id === parentId || parentId === null)) {
-            return {
-              ...item,
-              children: [...(item.children || []), newFolder]
-            };
-          } else if (item.type === 'folder' && item.children) {
-            return {
-              ...item,
-              children: addToItems(item.children)
-            };
-          }
-          return item;
-        });
-      };
-      return addToItems(prevItems);
+      path,
+      parentId: parentId ? parseInt(parentId) : null,
     });
 
     setNewItemName('');
-    // Convert Set to Array before spreading
-    setExpandedFolders(prev => new Set([...Array.from(prev), newFolder.id]));
+    setSelectedFolder(null);
+    setExpandedFolders(prev => new Set([...Array.from(prev), path]));
   };
 
-  const renderItem = (item: FileSystemItem, level: number = 0) => {
-    const isExpanded = expandedFolders.has(item.id);
+  const handleDelete = async () => {
+    if (!itemToDelete) return;
+    await deleteMutation.mutateAsync(itemToDelete.id);
+    setItemToDelete(null);
+  };
+
+  const handleRename = async () => {
+    if (!itemToRename || !newItemName) return;
+    await updateMutation.mutateAsync({
+      id: itemToRename.id,
+      data: { name: newItemName },
+    });
+    setItemToRename(null);
+    setNewItemName('');
+  };
+
+  const buildFileTree = (items: Contract[], parentId: number | null = null): Contract[] => {
+    return items
+      .filter(item => item.parentId === parentId)
+      .map(item => ({
+        ...item,
+        children: buildFileTree(items, item.id),
+      }));
+  };
+
+  const renderItem = (item: Contract, level: number = 0) => {
+    const isExpanded = expandedFolders.has(item.id.toString());
 
     return (
       <div key={item.id}>
@@ -158,9 +222,9 @@ contract ${newItemName.replace('.sol', '')} {
               style={{ paddingLeft: `${level * 12 + 8}px` }}
               onClick={() => {
                 if (item.type === 'folder') {
-                  toggleFolder(item.id);
-                } else if (item.content) {
-                  onFileSelect(item.content);
+                  toggleFolder(item.id.toString());
+                } else if (item.sourceCode) {
+                  onFileSelect(item.sourceCode);
                 }
               }}
             >
@@ -178,27 +242,42 @@ contract ${newItemName.replace('.sol', '')} {
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
+            <ContextMenuItem onClick={() => {
+              setItemToRename(item);
+              setNewItemName(item.name);
+            }}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Rename
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => setItemToDelete(item)}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </ContextMenuItem>
             {item.type === 'folder' && (
               <>
                 <ContextMenuItem onClick={() => {
-                  setSelectedFolder(item.id);
+                  setSelectedFolder(item.id.toString());
                   setIsCreatingFile(true);
                 }}>
+                  <FileCode className="h-4 w-4 mr-2" />
                   New File
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => {
-                  setSelectedFolder(item.id);
+                  setSelectedFolder(item.id.toString());
                   setIsCreatingFile(false);
                 }}>
+                  <Folder className="h-4 w-4 mr-2" />
                   New Folder
                 </ContextMenuItem>
               </>
             )}
           </ContextMenuContent>
         </ContextMenu>
-        {item.type === 'folder' && isExpanded && item.children && (
+        {item.type === 'folder' && isExpanded && (
           <div>
-            {item.children.map(child => renderItem(child, level + 1))}
+            {contracts
+              .filter(child => child.parentId === item.id)
+              .map(child => renderItem(child, level + 1))}
           </div>
         )}
       </div>
@@ -234,7 +313,6 @@ contract ${newItemName.replace('.sol', '')} {
                   } else {
                     handleFolderCreate(selectedFolder);
                   }
-                  setSelectedFolder(null);
                 }}
               >
                 Create
@@ -242,10 +320,53 @@ contract ${newItemName.replace('.sol', '')} {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Rename Dialog */}
+        <Dialog 
+          open={itemToRename !== null} 
+          onOpenChange={(open) => !open && setItemToRename(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Rename {itemToRename?.type}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <Input
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+              />
+              <Button className="w-full" onClick={handleRename}>
+                Rename
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog 
+          open={itemToDelete !== null}
+          onOpenChange={(open) => !open && setItemToDelete(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {itemToDelete?.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. {itemToDelete?.type === 'folder' && 'All files inside the folder will also be deleted.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
+
       <ScrollArea className="h-[calc(100vh-10rem)]">
         <div className="p-2">
-          {items.map(item => renderItem(item))}
+          {contracts
+            .filter(item => item.parentId === null)
+            .map(item => renderItem(item))}
         </div>
       </ScrollArea>
     </div>
