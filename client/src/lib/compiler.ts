@@ -13,18 +13,8 @@ export async function compileSolidity(source: string): Promise<CompileResult> {
 
     const input = {
       language: 'Solidity',
-      sources: {
-        'Contract.sol': {
-          content: source
-        }
-      },
-      settings: {
-        outputSelection: {
-          '*': {
-            '*': ['*']
-          }
-        }
-      }
+      sources: { 'Contract.sol': { content: source } },
+      settings: { outputSelection: { '*': { '*': ['*'] } } }
     };
 
     // Compile using loaded compiler
@@ -63,7 +53,7 @@ async function loadSolcJs() {
     script.onload = () => {
       // Wait for the Module to be fully initialized
       const checkForModule = () => {
-        if ((window as any).Module && (window as any).Module.cwrap) {
+        if ((window as any).Module) {
           const solc = (window as any).Module;
           resolve(solc);
         } else {
