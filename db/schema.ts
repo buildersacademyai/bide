@@ -5,8 +5,8 @@ import { relations } from "drizzle-orm";
 export const contracts = pgTable("contracts", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  type: text("type").notNull().default('file'),
-  path: text("path").notNull(),
+  type: text("type").default('file'),
+  path: text("path").default(''),
   parentId: integer("parent_id").references(() => contracts.id),
   sourceCode: text("source_code"),
   abi: jsonb("abi"),
