@@ -5,6 +5,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { compileSolidity } from '@/lib/compiler';
 import { apiRequest } from '@/lib/queryClient';
 import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 interface Props {
   sourceCode: string;
@@ -15,6 +16,7 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
   const [compiling, setCompiling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const handleCompile = async () => {
     if (!sourceCode.trim()) {
@@ -26,7 +28,6 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
     setError(null);
 
     try {
-      // First, compile the contract
       const result = await compileSolidity(sourceCode);
 
       if (result.errors?.length) {
@@ -45,21 +46,42 @@ export function ContractCompiler({ sourceCode, onCompileSuccess }: Props) {
         return;
       }
 
-      // Call success callback with compilation results
-      onCompileSuccess(result.abi, result.bytecode);
+      // Update compilation status
+      try {
+        await apiRequest('POST', '/api/contracts', {
+          name: 'New Contract',
+          sourceCode,
+          abi: result.abi,
+          bytecode: result.bytecode
+        });
 
-      // Update the contract in the database with compilation results
-      await apiRequest('POST', '/api/contracts', {
-        sourceCode,
-        abi: result.abi,
-        bytecode: result.bytecode
-      });
+        // Refresh the contracts list
+        await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
-      // Refresh the contracts list
-      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+        // Show success message
+        toast({
+          title: "Compilation successful",
+          description: "Contract compiled and saved successfully",
+        });
+
+        // Call success callback
+        onCompileSuccess(result.abi, result.bytecode);
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Failed to save contract",
+          description: err instanceof Error ? err.message : "Failed to save compilation result",
+        });
+      }
     } catch (err) {
       console.error('Compilation error:', err);
       setError(err instanceof Error ? err.message : 'Compilation failed');
+
+      toast({
+        variant: "destructive",
+        title: "Compilation failed",
+        description: err instanceof Error ? err.message : "An error occurred during compilation",
+      });
     } finally {
       setCompiling(false);
     }
