@@ -8,10 +8,23 @@ export function registerRoutes(app: Express): Server {
   // Contract CRUD operations
   app.post("/api/contracts", async (req, res) => {
     try {
+      console.log('Creating contract with data:', req.body);
+
+      if (!req.body.name || !req.body.type || !req.body.path) {
+        return res.status(400).json({ 
+          message: "Missing required fields: name, type, and path are required" 
+        });
+      }
+
       const contract = await db.insert(contracts).values(req.body).returning();
+      console.log('Contract created:', contract[0]);
       res.json(contract[0]);
     } catch (err) {
-      res.status(500).json({ message: "Failed to create contract" });
+      console.error('Error creating contract:', err);
+      res.status(500).json({ 
+        message: "Failed to create contract",
+        details: err instanceof Error ? err.message : String(err)
+      });
     }
   });
 

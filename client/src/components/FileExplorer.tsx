@@ -59,13 +59,26 @@ export function FileExplorer({ onFileSelect }: Props) {
   // Create contract mutation
   const createMutation = useMutation({
     mutationFn: async (newContract: Partial<Contract>) => {
-      const res = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newContract),
-      });
-      if (!res.ok) throw new Error('Failed to create item');
-      return res.json();
+      try {
+        const res = await fetch('/api/contracts', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(newContract),
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || 'Failed to create item');
+        }
+
+        return res.json();
+      } catch (error) {
+        console.error('Creation error:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
@@ -73,8 +86,10 @@ export function FileExplorer({ onFileSelect }: Props) {
         title: `${isCreatingFile ? 'File' : 'Folder'} created`,
         description: `Successfully created ${newItemName}`,
       });
+      setNewItemName('');
+      setSelectedFolder(null);
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         variant: "destructive",
         title: "Failed to create item",
@@ -163,9 +178,7 @@ contract ${newItemName.replace('.sol', '')} {
       parentId: parentId ? parseInt(parentId) : null,
       sourceCode,
     });
-
-    setNewItemName('');
-    setSelectedFolder(null);
+    
   };
 
   const handleFolderCreate = async (parentId: string | null = null) => {
@@ -180,8 +193,6 @@ contract ${newItemName.replace('.sol', '')} {
       parentId: parentId ? parseInt(parentId) : null,
     });
 
-    setNewItemName('');
-    setSelectedFolder(null);
     setExpandedFolders(prev => new Set([...Array.from(prev), path]));
   };
 
