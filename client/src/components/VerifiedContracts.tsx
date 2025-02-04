@@ -42,7 +42,14 @@ export function VerifiedContracts() {
   });
 
   const handleVerify = async () => {
-    if (!selectedContract) return;
+    if (!selectedContract) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select a contract to verify"
+      });
+      return;
+    }
 
     setIsVerifying(true);
     try {
@@ -63,12 +70,18 @@ export function VerifiedContracts() {
       try {
         contractData = await response.json();
       } catch (e) {
+        console.error('JSON parse error:', e);
         throw new Error('Invalid response format from server');
       }
 
       if (!contractData.source) {
         throw new Error('Contract source code not found');
       }
+
+      toast({
+        title: "Starting verification",
+        description: "Verifying contract on Etherscan...",
+      });
 
       // Start verification process
       const guid = await EtherscanService.verifyContract(
@@ -80,19 +93,23 @@ export function VerifiedContracts() {
       // Poll for verification status
       const checkStatus = async () => {
         const status = await EtherscanService.checkVerificationStatus(guid);
+
         if (status.status === 'pending') {
           // Check again in 5 seconds
           setTimeout(checkStatus, 5000);
         } else if (status.status === 'success') {
           // Update contract verification status in database
-          await fetch(`/api/contracts/${selectedContract}/verify`, {
+          const updateResponse = await fetch(`/api/contracts/${selectedContract}/verify`, {
             method: 'POST',
           });
 
+          if (!updateResponse.ok) {
+            throw new Error('Failed to update contract verification status');
+          }
+
           toast({
-            title: "Contract verified",
-            description: "Successfully verified on Etherscan",
-            variant: "default"
+            title: "Success",
+            description: "Contract successfully verified on Etherscan",
           });
 
           // Refresh the contracts lists
