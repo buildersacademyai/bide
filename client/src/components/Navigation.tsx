@@ -2,9 +2,10 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { UserProfile } from "@/components/UserProfile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getConnectedAccount, connectWallet } from "@/lib/web3";
+import { Web3AuthService } from "@/lib/web3/auth-service";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
 
 export function Navigation() {
   const [location] = useLocation();
@@ -14,14 +15,38 @@ export function Navigation() {
 
   const { data: address, isLoading } = useQuery({ 
     queryKey: ['wallet'],
-    queryFn: getConnectedAccount,
+    queryFn: Web3AuthService.getCurrentAddress,
     refetchOnWindowFocus: true,
     retry: false
   });
 
+  useEffect(() => {
+    // Listen for network changes
+    const handleNetworkChange = () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      toast({
+        title: "Network changed",
+        description: "Connected to new network",
+      });
+    };
+
+    // Listen for account changes
+    const handleAccountChange = () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    };
+
+    window.addEventListener('networkChanged', handleNetworkChange);
+    window.addEventListener('accountChanged', handleAccountChange);
+
+    return () => {
+      window.removeEventListener('networkChanged', handleNetworkChange);
+      window.removeEventListener('accountChanged', handleAccountChange);
+    };
+  }, [queryClient, toast]);
+
   const handleConnect = async () => {
     try {
-      await connectWallet();
+      await Web3AuthService.connect();
       await queryClient.invalidateQueries({ queryKey: ['wallet'] });
       toast({
         title: "Connected to wallet",

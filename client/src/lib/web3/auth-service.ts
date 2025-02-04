@@ -15,9 +15,13 @@ export class Web3AuthService {
   private static provider: ethers.BrowserProvider | null = null;
   private static address: string | null = null;
   private static chainId: string | null = null;
+  private static isConnecting: boolean = false;
 
   static async connect(): Promise<string> {
     try {
+      if (this.isConnecting) return this.address || '';
+      this.isConnecting = true;
+
       // Check if MetaMask is installed
       if (!window.ethereum) {
         throw new Error('MetaMask is not installed');
@@ -39,14 +43,22 @@ export class Web3AuthService {
       localStorage.setItem('wallet_address', this.address);
       localStorage.setItem('chain_id', this.chainId);
 
-      // Listen for account and network changes
-      window.ethereum.on('accountsChanged', this.handleAccountsChanged);
-      window.ethereum.on('chainChanged', this.handleChainChanged);
+      // Remove previous listeners before adding new ones
+      if (window.ethereum) {
+        window.ethereum.removeListener('accountsChanged', this.handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', this.handleChainChanged);
+
+        // Add new listeners
+        window.ethereum.on('accountsChanged', this.handleAccountsChanged);
+        window.ethereum.on('chainChanged', this.handleChainChanged);
+      }
 
       return this.address;
     } catch (error) {
       console.error('Failed to connect to MetaMask:', error);
       throw new Error('Failed to connect to MetaMask. Please make sure it is installed and unlocked.');
+    } finally {
+      this.isConnecting = false;
     }
   }
 
@@ -66,6 +78,10 @@ export class Web3AuthService {
     return localStorage.getItem('wallet_address');
   }
 
+  static async getCurrentChainId(): Promise<string | null> {
+    return localStorage.getItem('chain_id');
+  }
+
   static async signMessage(message: string): Promise<string> {
     if (!this.provider) {
       throw new Error('Not connected to MetaMask');
@@ -83,7 +99,11 @@ export class Web3AuthService {
         // User switched accounts
         this.address = accounts[0];
         localStorage.setItem('wallet_address', accounts[0]);
-        window.location.reload();
+
+        // Dispatch an event that components can listen to
+        window.dispatchEvent(new CustomEvent('accountChanged', {
+          detail: { address: accounts[0] }
+        }));
       }
     } catch (error) {
       console.error('Error handling account change:', error);
@@ -92,27 +112,26 @@ export class Web3AuthService {
 
   private static handleChainChanged = async (newChainId: string) => {
     try {
-      // Update stored chain ID
-      const oldChainId = this.chainId;
-      this.chainId = newChainId;
-      localStorage.setItem('chain_id', newChainId);
+      const hexChainId = newChainId.toLowerCase();
+      if (this.chainId?.toLowerCase() !== hexChainId) {
+        // Update stored chain ID
+        this.chainId = hexChainId;
+        localStorage.setItem('chain_id', hexChainId);
 
-      // Only update provider if we're still connected
-      if (window.ethereum && this.address) {
-        this.provider = new ethers.BrowserProvider(window.ethereum);
+        // Only update provider if we're still connected
+        if (window.ethereum && this.address) {
+          this.provider = new ethers.BrowserProvider(window.ethereum);
 
-        // If chain ID actually changed, refresh the page
-        if (oldChainId !== newChainId) {
           // Dispatch a custom event that components can listen to
           window.dispatchEvent(new CustomEvent('networkChanged', {
-            detail: { chainId: newChainId }
+            detail: { chainId: hexChainId }
           }));
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error handling network change:', error);
       // Only disconnect if there's an actual error, not just a network change
-      if (error.message !== 'underlying network changed') {
+      if (error instanceof Error && !error.message.includes('underlying network changed')) {
         await this.disconnect();
       }
     }

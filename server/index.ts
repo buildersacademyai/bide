@@ -6,20 +6,22 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Logging middleware only for API routes
 app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  // Only log API routes
+  if (req.path.startsWith("/api/")) {
+    const start = Date.now();
+    const path = req.path;
+    let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
 
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
+    res.on("finish", () => {
+      const duration = Date.now() - start;
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
@@ -30,36 +32,41 @@ app.use((req, res, next) => {
       }
 
       log(logLine);
-    }
-  });
-
+    });
+  }
   next();
 });
 
 (async () => {
   const server = registerRoutes(app);
 
+  // Error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     res.status(status).json({ message });
-    throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Set up Vite middleware in development
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
+    // Serve static files in production
     serveStatic(app);
+
+    // Serve index.html for all non-API routes in production
+    app.get("*", (req, res, next) => {
+      if (!req.path.startsWith("/api/")) {
+        res.sendFile("index.html", { root: "./dist" });
+      } else {
+        next();
+      }
+    });
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client
+  // Listen on all interfaces
   const PORT = 5000;
   server.listen(PORT, "0.0.0.0", () => {
-    log(`serving on port ${PORT}`);
+    log(`Server running on port ${PORT}`);
   });
 })();
