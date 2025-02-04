@@ -49,6 +49,20 @@ export class EtherscanService {
     return 'v0.8.17+commit.8df45f5f';
   }
 
+  private static getEvmVersion(compilerVersion: string): string {
+    // Extract the version number from the compiler version string
+    const version = compilerVersion.match(/v(\d+\.\d+\.\d+)/)?.[1];
+    if (!version) return 'paris';
+
+    // Map Solidity versions to appropriate EVM versions
+    if (version >= '0.8.18') return 'paris';
+    if (version >= '0.8.16') return 'london';
+    if (version >= '0.8.13') return 'berlin';
+    if (version >= '0.8.10') return 'istanbul';
+    if (version >= '0.8.7') return 'berlin';
+    return 'london'; // Default to london for older versions
+  }
+
   static async verifyContract(
     address: string,
     sourceCode: string,
@@ -82,6 +96,15 @@ export class EtherscanService {
       // Get supported compiler version
       const compilerVersion = this.getSupportedCompilerVersion(versionMatch[1].trim());
 
+      // Get appropriate EVM version
+      const evmVersion = this.getEvmVersion(compilerVersion);
+
+      console.log('Verification settings:', {
+        compilerVersion,
+        evmVersion,
+        contractName: actualContractName
+      });
+
       const response = await axios.post(
         `https://api-${network}.etherscan.io/api`,
         null,
@@ -97,7 +120,7 @@ export class EtherscanService {
             compilerversion: compilerVersion,
             optimizationUsed: 1, // Enable optimization to match deployment
             runs: 200,
-            evmversion: 'london',
+            evmversion: evmVersion,
             licenseType: 1 // MIT License
           },
         }
