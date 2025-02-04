@@ -43,6 +43,7 @@ export const getQueryFn: <T>(options: {
       const chainId = localStorage.getItem('chain_id');
       const headers: Record<string, string> = {};
 
+      // Always include wallet address in API requests for data filtering
       if (address) {
         headers['x-owner-address'] = address;
       }
@@ -63,9 +64,8 @@ export const getQueryFn: <T>(options: {
       return await res.json();
     } catch (error) {
       if (error instanceof Error && error.message.includes('network')) {
-        // Retry the query after a short delay for network-related errors
         await new Promise(resolve => setTimeout(resolve, 1000));
-        throw error; // Let React Query handle the retry
+        throw error;
       }
       throw error;
     }
@@ -79,7 +79,6 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: Infinity,
       retry: (failureCount, error) => {
-        // Retry up to 3 times for network-related errors
         if (error instanceof Error && error.message.includes('network')) {
           return failureCount < 3;
         }
@@ -94,7 +93,6 @@ export const queryClient = new QueryClient({
 
 // Listen for network changes and invalidate queries
 window.addEventListener('networkChanged', () => {
-  // Add a small delay before invalidating queries to allow the network to stabilize
   setTimeout(() => {
     queryClient.invalidateQueries();
   }, 500);

@@ -7,9 +7,9 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import About from "@/pages/about";
 import Editor from "@/pages/editor";
-import { AuthProvider } from "@/lib/web3/auth-context";
-import { useAuth } from "@/lib/web3/auth-context";
+import { AuthProvider, useAuth } from "@/lib/web3/auth-context";
 import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // Protected route component
 function ProtectedRoute({ component: Component }: { component: () => JSX.Element }) {
@@ -23,23 +23,31 @@ function ProtectedRoute({ component: Component }: { component: () => JSX.Element
     );
   }
 
+  // If no wallet is connected, show connect wallet UI
   if (!address) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
-        <h2 className="text-2xl font-bold">Connect Wallet</h2>
-        <p className="text-muted-foreground">Please connect your MetaMask wallet to continue</p>
+        <h2 className="text-2xl font-bold">Connect Your Wallet</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          Connect your wallet to access the IDE and manage your smart contracts.
+          Your contracts and transactions will be associated with your wallet address.
+        </p>
       </div>
     );
   }
 
+  // If wallet is connected, render the protected component
   return <Component />;
 }
 
 function Router() {
+  const { address } = useAuth();
+
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/about" component={About} />
+      {/* Automatically redirect to app if wallet is connected */}
       <Route path="/app">
         {() => <ProtectedRoute component={Editor} />}
       </Route>
