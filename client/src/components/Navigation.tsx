@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { UserProfile } from "./UserProfile";
+import { UserProfile } from "@/components/UserProfile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getConnectedAccount, connectWallet } from "@/lib/web3";
 import { useToast } from "@/hooks/use-toast";
