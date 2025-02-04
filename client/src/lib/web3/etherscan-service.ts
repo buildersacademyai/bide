@@ -2,13 +2,10 @@ import axios from 'axios';
 
 export class EtherscanService {
   private static async getApiKey(): Promise<string> {
-    // Try to get the API key from localStorage first
     const storedKey = localStorage.getItem('etherscan_api_key');
     if (storedKey) {
       return storedKey;
     }
-
-    // If no key is stored, throw an error to trigger the API key dialog
     throw new Error('NO_API_KEY');
   }
 
@@ -52,6 +49,50 @@ export class EtherscanService {
     return 'v0.8.17+commit.8df45f5f';
   }
 
+  // Try verification with different EVM versions
+  private static async tryVerification(
+    params: Record<string, any>,
+    network: string,
+    evmVersions: string[] = ['byzantium', 'constantinople', 'petersburg', 'istanbul', 'berlin', 'london']
+  ): Promise<string> {
+    let lastError: Error | null = null;
+
+    // Try each EVM version until one works
+    for (const evmVersion of evmVersions) {
+      try {
+        const response = await axios.post(
+          `https://api-${network}.etherscan.io/api`,
+          null,
+          {
+            params: {
+              ...params,
+              evmversion: evmVersion,
+            },
+          }
+        );
+
+        if (response.data.status === '0') {
+          // If it's not an EVM version error, throw immediately
+          if (!response.data.result.toLowerCase().includes('evm version')) {
+            throw new Error(response.data.result);
+          }
+          // Otherwise continue trying other versions
+          lastError = new Error(response.data.result);
+          continue;
+        }
+
+        return response.data.result;
+      } catch (error) {
+        lastError = error as Error;
+        if (axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) {
+          throw error; // Re-throw auth errors immediately
+        }
+      }
+    }
+
+    throw lastError || new Error('Verification failed with all EVM versions');
+  }
+
   static async verifyContract(
     address: string,
     sourceCode: string,
@@ -85,32 +126,22 @@ export class EtherscanService {
       // Get supported compiler version
       const compilerVersion = this.getSupportedCompilerVersion(versionMatch[1].trim());
 
-      const response = await axios.post(
-        `https://api-${network}.etherscan.io/api`,
-        null,
-        {
-          params: {
-            module: 'contract',
-            action: 'verifysourcecode',
-            apikey: apiKey,
-            contractaddress: address,
-            sourceCode,
-            contractname: actualContractName,
-            codeformat: 'solidity-single-file',
-            compilerversion: compilerVersion,
-            optimizationUsed: 0,
-            runs: 200,
-            evmversion: 'default', // Use default for better compatibility
-            licenseType: 1 // MIT License
-          },
-        }
-      );
+      const verificationParams = {
+        module: 'contract',
+        action: 'verifysourcecode',
+        apikey: apiKey,
+        contractaddress: address,
+        sourceCode,
+        contractname: actualContractName,
+        codeformat: 'solidity-single-file',
+        compilerversion: compilerVersion,
+        optimizationUsed: 0,
+        runs: 200,
+        licenseType: 1
+      };
 
-      if (response.data.status === '0') {
-        throw new Error(response.data.result);
-      }
+      return await this.tryVerification(verificationParams, network);
 
-      return response.data.result; // This is the GUID for checking verification status
     } catch (error) {
       if (error instanceof Error && error.message === 'NO_API_KEY') {
         throw error;
@@ -162,7 +193,7 @@ export class EtherscanService {
         };
       }
     } catch (error) {
-      if (error.message === 'NO_API_KEY') {
+      if (error instanceof Error && error.message === 'NO_API_KEY') {
         throw error;
       }
 
