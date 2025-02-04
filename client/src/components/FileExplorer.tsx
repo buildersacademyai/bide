@@ -238,8 +238,14 @@ export function FileExplorer({ onFileSelect }: Props) {
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/contracts/${id}`, {
         method: 'DELETE',
+        headers: {
+          'x-wallet-address': connectedAddress || ''
+        }
       });
-      if (!res.ok) throw new Error('Failed to delete item');
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to delete item');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -249,7 +255,7 @@ export function FileExplorer({ onFileSelect }: Props) {
         description: "Successfully deleted the item",
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         variant: "destructive",
         title: "Failed to delete item",
