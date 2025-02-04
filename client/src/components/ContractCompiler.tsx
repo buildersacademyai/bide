@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card } from '@/components/ui/card';
 import { AlertCircle, Loader2, Terminal, Rocket } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -11,9 +10,10 @@ interface Props {
   sourceCode: string;
   contractId?: number;
   onCompileSuccess: (abi: any[], bytecode: string) => void;
+  onDeploySuccess?: (address: string) => void;
 }
 
-export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: Props) {
+export function ContractCompiler({ sourceCode, contractId, onCompileSuccess, onDeploySuccess }: Props) {
   const { toast } = useToast();
   const [compiling, setCompiling] = useState(false);
   const [deploying, setDeploying] = useState(false);
@@ -23,7 +23,6 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
   const queryClient = useQueryClient();
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
 
-  // Check wallet connection on mount and when account changes
   useEffect(() => {
     const checkWalletConnection = async () => {
       const account = await getConnectedAccount();
@@ -60,6 +59,14 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
       });
 
       const address = await deployContract(compiledContract.abi, compiledContract.bytecode);
+
+      // Update deployment status in the UI
+      if (onDeploySuccess) {
+        onDeploySuccess(address);
+      }
+
+      // Invalidate queries to refresh contract list
+      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
       toast({
         title: "Deployment successful",
@@ -112,11 +119,6 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
     setCompiledContract(null);
 
     try {
-      toast({
-        title: "Compiling contract",
-        description: "Please wait while the contract is being compiled...",
-      });
-
       const response = await fetch('/api/compile', {
         method: 'POST',
         headers: { 
@@ -132,25 +134,15 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
       const data = await response.json();
 
       if (!response.ok) {
-        if (data.errors) {
-          setError(data.errors.map((e: any) => e.formattedMessage).join('\n'));
-          toast({
-            variant: "destructive",
-            title: "Compilation failed",
-            description: "Contract has compilation errors",
-          });
-          return;
-        }
         throw new Error(data.message || 'Compilation failed');
       }
 
       setLastCompiledCode(sourceCode);
       setCompiledContract({ abi: data.abi, bytecode: data.bytecode });
-      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
       toast({
         title: "Compilation successful",
-        description: `Contract compiled successfully`,
+        description: "Contract compiled successfully",
       });
 
       onCompileSuccess(data.abi, data.bytecode);
