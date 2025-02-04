@@ -85,7 +85,6 @@ export async function getConnectedAccount() {
     const accounts = await provider.send("eth_accounts", []);
 
     if (accounts[0]) {
-      // Verify we're on a supported network
       const network = await provider.getNetwork();
       console.log('Current network:', network.name);
 
@@ -93,7 +92,6 @@ export async function getConnectedAccount() {
       currentChainId = chainId;
       console.log('Chain ID:', chainId);
 
-      // Verify if the network is supported
       const isSupportedNetwork = Object.values(SUPPORTED_NETWORKS)
         .some(net => net.chainId.toLowerCase() === chainId.toLowerCase());
 
@@ -122,12 +120,26 @@ export async function deployContract(abi: any[], bytecode: string) {
     // Get the signer
     const signer = await provider.getSigner();
 
-    // Create contract factory
-    const factory = new ethers.ContractFactory(abi, bytecode, signer);
+    // Ensure bytecode is properly formatted
+    const formattedBytecode = bytecode.startsWith('0x') ? bytecode : `0x${bytecode}`;
 
-    // Deploy contract with proper gas estimation
+    // Validate bytecode format
+    if (!/^0x[0-9a-fA-F]*$/.test(formattedBytecode)) {
+      throw new Error('Invalid bytecode format');
+    }
+
+    // Create contract factory
+    const factory = new ethers.ContractFactory(abi, formattedBytecode, signer);
+
+    // Get deployment transaction data for gas estimation
+    const deployTx = await factory.getDeployTransaction();
+    if (!deployTx.data) {
+      throw new Error('Failed to generate deployment transaction data');
+    }
+
+    // Estimate gas
     const gasEstimate = await provider.estimateGas({
-      data: bytecode
+      data: deployTx.data
     });
 
     // Add 20% buffer to gas estimate
@@ -140,16 +152,16 @@ export async function deployContract(abi: any[], bytecode: string) {
       gasLimit
     });
 
-    const deployTx = contract.deploymentTransaction();
-    if (!deployTx) {
+    const deploymentTx = contract.deploymentTransaction();
+    if (!deploymentTx) {
       throw new Error('Deployment transaction failed to create');
     }
 
-    console.log('Deployment transaction hash:', deployTx.hash);
+    console.log('Deployment transaction hash:', deploymentTx.hash);
 
     // Wait for deployment
     console.log('Waiting for deployment transaction confirmation...');
-    const receipt = await deployTx.wait();
+    const receipt = await deploymentTx.wait();
 
     if (!receipt) {
       throw new Error('Failed to get deployment receipt');
