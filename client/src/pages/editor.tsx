@@ -7,13 +7,15 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { Loader2, Code2, Rocket, Terminal, History, Pencil } from 'lucide-react';
+import { Loader2, Code2, Rocket, Terminal, History, Pencil, CheckCircle2 } from 'lucide-react';
 import { CompilationResults } from '@/components/CompilationResults';
 import { DeployedContracts } from '@/components/DeployedContracts';
 import { ContractCompiler } from '@/components/ContractCompiler';
 import { ContractDeployer } from '@/components/ContractDeployer';
 import { TransactionHistory } from '@/components/TransactionHistory';
 import { ContractInteraction } from '@/components/ContractInteraction';
+import { VerifiedContracts } from '@/components/VerifiedContracts'; // Import the VerifiedContracts component
+
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -148,29 +150,8 @@ export default function Editor() {
         <FileExplorer onFileSelect={handleFileSelect} />
 
         <div className="flex-1 p-4 space-y-5 overflow-y-auto">
-          {/* <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                Smart Contract IDE
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Write, compile, and deploy your smart contracts
-              </p>
-            </div>
-            {!isWalletLoading ? (
-              !account ? (
-                <Button onClick={handleConnect} className="gap-2">
-                  <Terminal className="w-4 h-4" />
-                  Connect Wallet
-                </Button>
-              ) : null
-            ) : (
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            )}
-          </div> */}
-
           <Tabs defaultValue="editor" className="w-full">
-            <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
+            <TabsList className="grid w-full grid-cols-6 lg:w-[600px]">
               <TabsTrigger value="editor" className="gap-2">
                 <Code2 className="w-4 h-4" />
                 Editor
@@ -190,6 +171,10 @@ export default function Editor() {
               <TabsTrigger value="interact" className="gap-2">
                 <Pencil className="w-4 h-4" />
                 Interact
+              </TabsTrigger>
+              <TabsTrigger value="verify" className="gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                Verify
               </TabsTrigger>
             </TabsList>
 
@@ -254,6 +239,13 @@ export default function Editor() {
               <Card className="p-6">
                 <div className="space-y-6">
                   <ContractInteraction />
+                </div>
+              </Card>
+            </TabsContent>
+            <TabsContent value="verify" className="mt-6">
+              <Card className="p-6">
+                <div className="space-y-6">
+                  <VerifiedContracts />
                 </div>
               </Card>
             </TabsContent>

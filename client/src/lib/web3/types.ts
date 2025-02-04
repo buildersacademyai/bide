@@ -22,6 +22,8 @@ export interface DeployedContract {
   abi: ContractFunction[];
   network: string;
   createdAt: string;
+  isVerified?: boolean;
+  verifiedAt?: string;
 }
 
 export interface ContractCallResult {
