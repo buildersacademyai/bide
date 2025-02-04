@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { AlertCircle, Loader2, Rocket } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
-import { deployContract } from '@/lib/web3';
+import { deployContract, getConnectedAccount } from '@/lib/web3';
 
 interface Props {
   contractId: number;
@@ -29,6 +29,12 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
     setError(null);
 
     try {
+      // Get the connected wallet address first
+      const account = await getConnectedAccount();
+      if (!account) {
+        throw new Error('Please connect your wallet first');
+      }
+
       toast({
         title: "Deploying contract",
         description: "Please confirm the transaction in MetaMask...",
@@ -43,7 +49,10 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
       // Update contract in database with deployment info
       const response = await fetch(`/api/contracts/${contractId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-wallet-address': account // Add wallet address header
+        },
         body: JSON.stringify({
           address,
           network: 'sepolia', // Using Sepolia as default testnet
@@ -51,7 +60,8 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update contract deployment info');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update contract deployment info');
       }
 
       // Refresh contracts list
@@ -76,7 +86,7 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
   };
 
   return (
-    <Card className="">
+    <Card className="p-4">
       <Button
         onClick={handleDeploy}
         disabled={deploying || !abi || !bytecode}
