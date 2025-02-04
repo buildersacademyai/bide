@@ -236,16 +236,22 @@ export function FileExplorer({ onFileSelect }: Props) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      if (!connectedAddress) {
+        throw new Error('Please connect your wallet to delete files');
+      }
+
       const res = await fetch(`/api/contracts/${id}`, {
         method: 'DELETE',
         headers: {
-          'x-wallet-address': connectedAddress || ''
+          'x-wallet-address': connectedAddress
         }
       });
+
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Failed to delete item');
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to delete item');
       }
+
       return res.json();
     },
     onSuccess: () => {
@@ -254,6 +260,7 @@ export function FileExplorer({ onFileSelect }: Props) {
         title: "Item deleted",
         description: "Successfully deleted the item",
       });
+      setItemToDelete(null); // Close the delete dialog
     },
     onError: (error: Error) => {
       toast({
@@ -261,6 +268,7 @@ export function FileExplorer({ onFileSelect }: Props) {
         title: "Failed to delete item",
         description: error.message,
       });
+      setItemToDelete(null); // Close the delete dialog on error
     },
   });
 
