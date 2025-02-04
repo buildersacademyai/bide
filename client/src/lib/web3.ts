@@ -36,30 +36,18 @@ export async function connectWallet() {
     currentChainId = chainId;
     console.log('Connected to network:', network.name);
 
-    // Setup network change handler with debounce
-    let networkChangeTimeout: NodeJS.Timeout;
+    // Setup network change handler
     window.ethereum.on('chainChanged', (newChainId: string) => {
-      // Clear any pending timeout
-      if (networkChangeTimeout) {
-        clearTimeout(networkChangeTimeout);
-      }
-
-      // Only reload if the chain actually changed
       if (newChainId !== currentChainId) {
         console.log('Network changed from:', currentChainId, 'to:', newChainId);
         currentChainId = newChainId;
-
-        // Debounce the reload
-        networkChangeTimeout = setTimeout(() => {
-          window.location.reload();
-        }, 1000); // Wait 1 second before reloading
+        window.location.reload();
       }
     });
 
     // Setup account change handler
     window.ethereum.on('accountsChanged', (accounts: string[]) => {
       console.log('Account changed:', accounts[0]);
-      // Only reload if we actually have a new account
       if (accounts[0]) {
         window.location.reload();
       }
@@ -87,10 +75,8 @@ export async function getConnectedAccount() {
     if (accounts[0]) {
       const network = await provider.getNetwork();
       console.log('Current network:', network.name);
-
       const chainId = await provider.send("eth_chainId", []);
       currentChainId = chainId;
-      console.log('Chain ID:', chainId);
 
       const isSupportedNetwork = Object.values(SUPPORTED_NETWORKS)
         .some(net => net.chainId.toLowerCase() === chainId.toLowerCase());
@@ -123,55 +109,22 @@ export async function deployContract(abi: any[], bytecode: string) {
     // Ensure bytecode is properly formatted
     const formattedBytecode = bytecode.startsWith('0x') ? bytecode : `0x${bytecode}`;
 
-    // Validate bytecode format
-    if (!/^0x[0-9a-fA-F]*$/.test(formattedBytecode)) {
-      throw new Error('Invalid bytecode format');
-    }
-
     // Create contract factory
     const factory = new ethers.ContractFactory(abi, formattedBytecode, signer);
-
-    // Get deployment transaction data for gas estimation
-    const deployTx = await factory.getDeployTransaction();
-    if (!deployTx.data) {
-      throw new Error('Failed to generate deployment transaction data');
-    }
-
-    // Estimate gas
-    const gasEstimate = await provider.estimateGas({
-      data: deployTx.data
-    });
-
-    // Add 20% buffer to gas estimate
-    const gasLimit = gasEstimate * BigInt(120) / BigInt(100);
-
-    console.log('Deploying contract with gas limit:', gasLimit.toString());
+    console.log('Deploying contract...');
 
     // Deploy the contract
-    const contract = await factory.deploy({
-      gasLimit
-    });
+    const contract = await factory.deploy();
+    console.log('Waiting for deployment...');
 
-    const deploymentTx = contract.deploymentTransaction();
-    if (!deploymentTx) {
-      throw new Error('Deployment transaction failed to create');
-    }
-
-    console.log('Deployment transaction hash:', deploymentTx.hash);
-
-    // Wait for deployment confirmation with 2 blocks
-    console.log('Waiting for deployment transaction confirmation...');
-    const receipt = await deploymentTx.wait(2);
-
-    if (!receipt || receipt.status !== 1) {
-      throw new Error('Transaction failed or was reverted');
-    }
+    // Wait for deployment to complete
+    await contract.waitForDeployment();
 
     // Get deployed contract address
     const address = await contract.getAddress();
     console.log('Contract deployed at:', address);
 
-    // Verify contract code exists at address
+    // Verify contract deployment
     const code = await provider.getCode(address);
     if (code === '0x') {
       throw new Error('Contract deployment failed - no code at address');
