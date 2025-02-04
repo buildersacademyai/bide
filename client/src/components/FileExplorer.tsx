@@ -253,11 +253,22 @@ export function FileExplorer({ onFileSelect }: Props) {
       return;
     }
 
-    const path = parentId ? `${parentId}/${newItemName}` : newItemName;
-    const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
-    const contractName = fileName.replace('.sol', '');
+    try {
+      // Validate file name format
+      const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
+      const contractName = fileName.replace('.sol', '');
 
-    const sourceCode = `// SPDX-License-Identifier: MIT
+      // Validate contract name
+      if (!/^[A-Z][A-Za-z0-9]*$/.test(contractName)) {
+        toast({
+          variant: "destructive",
+          title: "Invalid contract name",
+          description: "Contract name must start with a capital letter and contain only letters and numbers"
+        });
+        return;
+      }
+
+      const sourceCode = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 contract ${contractName} {
@@ -276,44 +287,86 @@ contract ${contractName} {
     }
 }`;
 
-    try {
-      // First check if root folder exists
+      // First try to find the root folder
+      let rootFolderId: number | null = null;
       const rootResponse = await fetch('/api/contracts?type=folder&name=Contracts');
-      let rootFolder = await rootResponse.json();
 
-      let effectiveParentId = parentId;
+      if (!rootResponse.ok) {
+        throw new Error('Failed to check root folder');
+      }
 
-      // If no root folder exists or no parent specified, create root folder
-      if (!rootFolder || (!parentId && rootFolder.length === 0)) {
-        const rootFolderResponse = await fetch('/api/contracts', {
+      const rootFolders = await rootResponse.json();
+      if (Array.isArray(rootFolders) && rootFolders.length > 0) {
+        rootFolderId = rootFolders[0].id;
+      }
+
+      // If no root folder exists, create it
+      if (!rootFolderId) {
+        const createRootResponse = await fetch('/api/contracts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: 'Contracts',
             type: 'folder',
             path: '',
-            parentId: null
+            parentId: null,
+            ownerAddress: connectedAddress
           })
         });
-        rootFolder = await rootFolderResponse.json();
-        effectiveParentId = rootFolder.id.toString();
+
+        if (!createRootResponse.ok) {
+          throw new Error('Failed to create root folder');
+        }
+
+        const rootFolder = await createRootResponse.json();
+        rootFolderId = rootFolder.id;
       }
 
-      // Create the contract file with owner address
-      await createMutation.mutateAsync({
-        name: fileName,
-        type: 'file',
-        path,
-        parentId: effectiveParentId ? parseInt(effectiveParentId) : null,
-        sourceCode,
-        ownerAddress: connectedAddress
+      // Use the root folder ID or provided parent ID
+      const effectiveParentId = parentId ? parseInt(parentId) : rootFolderId;
+
+      // Create the contract file
+      const createFileResponse = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: fileName,
+          type: 'file',
+          path: `${effectiveParentId}/${fileName}`,
+          parentId: effectiveParentId,
+          sourceCode,
+          ownerAddress: connectedAddress
+        })
       });
+
+      if (!createFileResponse.ok) {
+        const errorData = await createFileResponse.json();
+        throw new Error(errorData.message || 'Failed to create contract file');
+      }
+
+      const newContract = await createFileResponse.json();
+
+      // Clear the form and refresh the list
+      setNewItemName('');
+      setSelectedFolder(null);
+      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+
+      toast({
+        title: "Contract created",
+        description: `Successfully created ${fileName}`,
+      });
+
+      // Select the new contract in the editor
+      if (newContract.sourceCode) {
+        onFileSelect(newContract.sourceCode, newContract.id);
+      }
+
     } catch (error) {
-      console.error('Error creating file:', error);
+      console.error('Error creating contract:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create file"
+        description: error instanceof Error ? error.message : "Failed to create contract"
       });
     }
   };
