@@ -30,10 +30,24 @@ export function DeployedContracts() {
 
   const { data: contracts = [], isLoading } = useQuery<DeployedContract[]>({
     queryKey: ['/api/contracts'],
-    select: (data) => data.filter(contract => 
-      contract.address && contract.ownerAddress === connectedAddress
-    ),
-    enabled: !!connectedAddress,
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/contracts');
+        if (!response.ok) {
+          throw new Error('Failed to fetch contracts');
+        }
+        const data = await response.json();
+        return data.filter((contract: DeployedContract) => 
+          // Show only deployed contracts owned by the current user
+          contract.address && 
+          (!contract.ownerAddress || contract.ownerAddress === connectedAddress)
+        );
+      } catch (error) {
+        console.error('Error fetching contracts:', error);
+        return [];
+      }
+    },
+    enabled: true, // Always enabled to show deployed contracts
   });
 
   const handleCopyAddress = async (address: string, contractId: number) => {

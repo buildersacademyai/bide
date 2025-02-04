@@ -3,6 +3,7 @@ import type { ContractFunction, ContractCallResult, Web3Error } from './types';
 
 export class ContractService {
   private static formatError(error: any): Web3Error {
+    console.error('Contract error:', error);
     const web3Error: Web3Error = new Error(
       error.message || 'Contract interaction failed'
     );
@@ -12,20 +13,25 @@ export class ContractService {
   }
 
   private static formatValue(value: string, type: string): any {
-    if (type.startsWith('uint') || type.startsWith('int')) {
-      return ethers.parseUnits(value || '0', 0);
-    }
-    if (type === 'bool') {
-      return value.toLowerCase() === 'true';
-    }
-    if (type.includes('[]')) {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return [];
+    try {
+      if (type.startsWith('uint') || type.startsWith('int')) {
+        return ethers.parseUnits(value || '0', 0);
       }
+      if (type === 'bool') {
+        return value.toLowerCase() === 'true';
+      }
+      if (type.includes('[]')) {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return [];
+        }
+      }
+      return value;
+    } catch (error) {
+      console.error('Error formatting value:', error);
+      throw new Error(`Invalid value for type ${type}: ${value}`);
     }
-    return value;
   }
 
   private static formatResult(result: any): string {
@@ -87,6 +93,12 @@ export class ContractService {
 
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+
+      // Validate contract address
+      if (!ethers.isAddress(address)) {
+        throw new Error('Invalid contract address');
+      }
+
       const contract = new ethers.Contract(address, abi, signer);
 
       // Find function in ABI and convert inputs
@@ -95,9 +107,25 @@ export class ContractService {
         throw new Error(`Function ${functionName} not found in ABI`);
       }
 
-      const convertedInputs = inputs.map((value, index) => 
-        this.formatValue(value, functionAbi.inputs[index].type)
-      );
+      // Validate input length
+      if (functionAbi.inputs.length !== inputs.length) {
+        throw new Error(`Expected ${functionAbi.inputs.length} inputs, got ${inputs.length}`);
+      }
+
+      // Convert inputs with proper error handling
+      const convertedInputs = inputs.map((value, index) => {
+        try {
+          return this.formatValue(value, functionAbi.inputs[index].type);
+        } catch (error) {
+          throw new Error(`Invalid input for parameter ${functionAbi.inputs[index].name}: ${error.message}`);
+        }
+      });
+
+      console.log('Calling contract function:', {
+        address,
+        functionName,
+        inputs: convertedInputs
+      });
 
       const result = await contract[functionName](...convertedInputs);
 
