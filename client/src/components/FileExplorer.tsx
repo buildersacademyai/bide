@@ -3,13 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
+import { 
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
+import { 
   Dialog,
   DialogContent,
   DialogHeader,
@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Folder, FileCode, ChevronDown, Plus, Pencil, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { Folder, FileCode, ChevronDown, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getConnectedAccount } from '@/lib/web3';
 
@@ -55,91 +55,72 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
 
-  // Handle wallet connection and changes with improved error handling
+  // Handle wallet connection and changes
   useEffect(() => {
     const checkWallet = async () => {
-      try {
-        const account = await getConnectedAccount();
-        setConnectedAddress(account);
-        if (account) {
-          await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
-        }
-      } catch (error) {
-        console.error('Wallet check error:', error);
-        toast({
-          variant: "destructive",
-          title: "Wallet Connection Error",
-          description: "Failed to connect to wallet. Please check MetaMask.",
-        });
+      const account = await getConnectedAccount();
+      setConnectedAddress(account);
+      if (account) {
+        // Invalidate queries when wallet changes
+        queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
       }
     };
 
+    // Initial check
     checkWallet();
 
+    // Listen for account changes
     if (window.ethereum) {
-      const handleAccountsChanged = async (accounts: string[]) => {
+      window.ethereum.on('accountsChanged', async (accounts: string[]) => {
         const newAccount = accounts[0] || null;
         setConnectedAddress(newAccount);
         if (newAccount) {
           await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
           toast({
-            title: "Wallet Changed",
+            title: "Wallet changed",
             description: `Connected to ${newAccount.slice(0, 6)}...${newAccount.slice(-4)}`,
           });
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Wallet Disconnected",
-            description: "Please connect your wallet to continue.",
-          });
         }
-      };
-
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      return () => {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-      };
+      });
     }
+
+    // Cleanup
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener('accountsChanged', () => {});
+      }
+    };
   }, [queryClient, toast]);
 
-  // Update the query with improved error handling and retry logic
-  const { data: contracts = [], isLoading, error: queryError } = useQuery<Contract[]>({
+  const { data: contracts = [], isLoading } = useQuery<Contract[]>({
     queryKey: ['/api/contracts', connectedAddress],
     queryFn: async () => {
       try {
-        if (!connectedAddress) {
-          return [];
-        }
-
-        const response = await fetch('/api/contracts', {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        });
-
+        const response = await fetch('/api/contracts');
         if (!response.ok) {
-          throw new Error(`Failed to fetch contracts: ${response.statusText}`);
+          console.error('Failed to fetch contracts:', response.statusText);
+          return [];
         }
 
         const data = await response.json();
         if (!Array.isArray(data)) {
-          throw new Error('Invalid response format');
+          console.error('Invalid response format:', data);
+          return [];
         }
 
-        return data.filter((contract: Contract) => (
-          (contract.type === 'folder' && (!contract.ownerAddress || contract.ownerAddress === connectedAddress)) ||
-          (contract.type === 'file' && contract.ownerAddress === connectedAddress)
-        ));
+        // Show all folders and files owned by the user
+        return data.filter((contract: Contract) => 
+          contract.type === 'folder' || // Show all folders
+          !contract.ownerAddress || // Show unowned files
+          contract.ownerAddress === connectedAddress // Show user's files
+        );
       } catch (error) {
         console.error('Error fetching contracts:', error);
-        throw error;
+        return [];
       }
     },
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    enabled: !!connectedAddress,
-    staleTime: 1000 * 30,
+    enabled: true,
+    staleTime: 1000 * 30, // Cache for 30 seconds
   });
 
   const createMutation = useMutation({
@@ -253,120 +234,67 @@ export function FileExplorer({ onFileSelect }: Props) {
       return;
     }
 
+    const path = parentId ? `${parentId}/${newItemName}` : newItemName;
+    const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
+    const contractName = fileName.replace('.sol', '');
+
+    const sourceCode = `// SPDX-License-Identifier: MIT
+  pragma solidity ^0.8.0;
+
+  contract ${contractName} {
+      string public message;
+
+      constructor() {
+          message = "Hello, Blockchain!";
+      }
+
+      function setMessage(string memory newMessage) public {
+          message = newMessage;
+      }
+
+      function getMessage() public view returns (string memory) {
+          return message;
+      }
+  }`;
+
     try {
-      // Validate file name format
-      const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
-      const contractName = fileName.replace('.sol', '');
-
-      // Validate contract name
-      if (!/^[A-Z][A-Za-z0-9]*$/.test(contractName)) {
-        toast({
-          variant: "destructive",
-          title: "Invalid contract name",
-          description: "Contract name must start with a capital letter and contain only letters and numbers"
-        });
-        return;
-      }
-
-      const sourceCode = `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract ${contractName} {
-    string public message;
-
-    constructor() {
-        message = "Hello, Blockchain!";
-    }
-
-    function setMessage(string memory newMessage) public {
-        message = newMessage;
-    }
-
-    function getMessage() public view returns (string memory) {
-        return message;
-    }
-}`;
-
-      // First try to find the root folder
-      let rootFolderId: number | null = null;
+      // First check if root folder exists
       const rootResponse = await fetch('/api/contracts?type=folder&name=Contracts');
+      let rootFolder = await rootResponse.json();
 
-      if (!rootResponse.ok) {
-        throw new Error('Failed to check root folder');
-      }
+      let effectiveParentId = parentId;
 
-      const rootFolders = await rootResponse.json();
-      if (Array.isArray(rootFolders) && rootFolders.length > 0) {
-        rootFolderId = rootFolders[0].id;
-      }
-
-      // If no root folder exists, create it
-      if (!rootFolderId) {
-        const createRootResponse = await fetch('/api/contracts', {
+      // If no root folder exists or no parent specified, create root folder
+      if (!rootFolder || (!parentId && rootFolder.length === 0)) {
+        const rootFolderResponse = await fetch('/api/contracts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: 'Contracts',
             type: 'folder',
             path: '',
-            parentId: null,
-            ownerAddress: connectedAddress
+            parentId: null
           })
         });
-
-        if (!createRootResponse.ok) {
-          throw new Error('Failed to create root folder');
-        }
-
-        const rootFolder = await createRootResponse.json();
-        rootFolderId = rootFolder.id;
+        rootFolder = await rootFolderResponse.json();
+        effectiveParentId = rootFolder.id.toString();
       }
 
-      // Use the root folder ID or provided parent ID
-      const effectiveParentId = parentId ? parseInt(parentId) : rootFolderId;
-
-      // Create the contract file
-      const createFileResponse = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: fileName,
-          type: 'file',
-          path: `${effectiveParentId}/${fileName}`,
-          parentId: effectiveParentId,
-          sourceCode,
-          ownerAddress: connectedAddress
-        })
+      // Create the contract file with owner address
+      await createMutation.mutateAsync({
+        name: fileName,
+        type: 'file',
+        path,
+        parentId: effectiveParentId ? parseInt(effectiveParentId) : null,
+        sourceCode,
+        ownerAddress: connectedAddress
       });
-
-      if (!createFileResponse.ok) {
-        const errorData = await createFileResponse.json();
-        throw new Error(errorData.message || 'Failed to create contract file');
-      }
-
-      const newContract = await createFileResponse.json();
-
-      // Clear the form and refresh the list
-      setNewItemName('');
-      setSelectedFolder(null);
-      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
-
-      toast({
-        title: "Contract created",
-        description: `Successfully created ${fileName}`,
-      });
-
-      // Select the new contract in the editor
-      if (newContract.sourceCode) {
-        onFileSelect(newContract.sourceCode, newContract.id);
-      }
-
     } catch (error) {
-      console.error('Error creating contract:', error);
+      console.error('Error creating file:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create contract"
+        description: error instanceof Error ? error.message : "Failed to create file"
       });
     }
   };
@@ -498,25 +426,6 @@ contract ${contractName} {
     );
   }
 
-  if (queryError) {
-    return (
-      <div className="w-64 border-r h-full bg-muted/30 flex flex-col items-center justify-center p-4">
-        <AlertCircle className="h-8 w-8 text-destructive mb-2" />
-        <p className="text-center text-muted-foreground">
-          Failed to load contracts. Please try again.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-4"
-          onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/contracts'] })}
-        >
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
   if (!connectedAddress) {
     return (
       <div className="w-64 border-r h-full bg-muted/30 flex flex-col items-center justify-center p-4">
@@ -551,7 +460,7 @@ contract ${contractName} {
                 placeholder={isCreatingFile ? "MyContract.sol" : "New Folder"}
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
-                onKeyDown={(e) => {
+                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     if (isCreatingFile) {
                       handleFileCreate(selectedFolder);
@@ -561,7 +470,7 @@ contract ${contractName} {
                   }
                 }}
               />
-              <Button
+              <Button 
                 className="w-full"
                 onClick={() => {
                   if (isCreatingFile) {
@@ -577,8 +486,8 @@ contract ${contractName} {
           </DialogContent>
         </Dialog>
 
-        <Dialog
-          open={itemToRename !== null}
+        <Dialog 
+          open={itemToRename !== null} 
           onOpenChange={(open) => !open && setItemToRename(null)}
         >
           <DialogContent>
@@ -597,7 +506,7 @@ contract ${contractName} {
           </DialogContent>
         </Dialog>
 
-        <AlertDialog
+        <AlertDialog 
           open={itemToDelete !== null}
           onOpenChange={(open) => !open && setItemToDelete(null)}
         >

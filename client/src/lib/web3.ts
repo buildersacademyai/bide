@@ -8,42 +8,19 @@ declare global {
 
 let provider: ethers.BrowserProvider | null = null;
 
-// Supported networks
-const SUPPORTED_NETWORKS = {
-  '0xaa36a7': 'Sepolia',
-  '0x5': 'Goerli'
-};
-
-async function checkNetwork() {
-  if (!window.ethereum) return false;
-
-  const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-  return chainId in SUPPORTED_NETWORKS;
-}
-
 export async function connectWallet() {
   if (!window.ethereum) {
     throw new Error("MetaMask not found! Please install MetaMask extension.");
   }
 
   try {
-    // Check if we're on a supported network
-    const isSupported = await checkNetwork();
-    if (!isSupported) {
-      throw new Error("Please switch to Sepolia or Goerli testnet in MetaMask");
-    }
-
     provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send("eth_requestAccounts", []);
 
     // Setup network change handler
-    window.ethereum.removeListener('chainChanged', () => {});
-    window.ethereum.on('chainChanged', async (chainId: string) => {
-      // Check if the new network is supported
-      if (chainId in SUPPORTED_NETWORKS) {
-        // Reload only if it's a supported network
-        window.location.reload();
-      }
+    window.ethereum.on('chainChanged', () => {
+      // Reload the page on network change as recommended by MetaMask
+      window.location.reload();
     });
 
     return accounts[0];
@@ -63,12 +40,7 @@ export async function getConnectedAccount() {
   try {
     provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send("eth_accounts", []);
-
-    // Only return the account if we're on a supported network
-    if (await checkNetwork()) {
-      return accounts[0] || null;
-    }
-    return null;
+    return accounts[0] || null;
   } catch (error) {
     console.error('Error getting connected account:', error);
     return null;
@@ -78,11 +50,6 @@ export async function getConnectedAccount() {
 export async function deployContract(abi: any[], bytecode: string) {
   if (!provider) {
     throw new Error("Please connect your wallet first");
-  }
-
-  // Check network before deployment
-  if (!await checkNetwork()) {
-    throw new Error("Please switch to Sepolia or Goerli testnet before deploying");
   }
 
   if (!abi || !bytecode) {
