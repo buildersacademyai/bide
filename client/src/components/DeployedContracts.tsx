@@ -37,9 +37,13 @@ export function DeployedContracts() {
           throw new Error('Failed to fetch contracts');
         }
         const data = await response.json();
+
+        // Filter for only successfully deployed contracts
         return data.filter((contract: DeployedContract) => 
-          // Show only deployed contracts owned by the current user
+          // Show only deployed contracts (with valid address) owned by the current user
           contract.address && 
+          contract.address.startsWith('0x') &&  // Ensure it's a valid Ethereum address
+          contract.address.length === 42 && // Standard Ethereum address length
           (!contract.ownerAddress || contract.ownerAddress === connectedAddress)
         );
       } catch (error) {
@@ -47,7 +51,8 @@ export function DeployedContracts() {
         return [];
       }
     },
-    enabled: true, // Always enabled to show deployed contracts
+    enabled: true,
+    staleTime: 1000 * 30, // Cache for 30 seconds
   });
 
   const handleCopyAddress = async (address: string, contractId: number) => {
@@ -63,7 +68,7 @@ export function DeployedContracts() {
   };
 
   const getExplorerUrl = (address: string, network: string) => {
-    const baseUrl = network === 'sepolia' 
+    const baseUrl = network.toLowerCase() === 'sepolia' 
       ? 'https://sepolia.etherscan.io/address/'
       : 'https://goerli.etherscan.io/address/';
     return `${baseUrl}${address}`;
@@ -92,7 +97,7 @@ export function DeployedContracts() {
   if (contracts.length === 0) {
     return (
       <Card className="p-6">
-        <p className="text-center text-muted-foreground">No deployed contracts yet</p>
+        <p className="text-center text-muted-foreground">No deployed contracts found</p>
       </Card>
     );
   }

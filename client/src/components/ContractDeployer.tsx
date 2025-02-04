@@ -3,13 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { AlertCircle, Loader2, Rocket } from 'lucide-react';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { deployContract } from '@/lib/web3';
@@ -20,17 +13,11 @@ interface Props {
   bytecode: string;
 }
 
-const NETWORKS = [
-  { id: 'sepolia', name: 'Sepolia Testnet' },
-  { id: 'goerli', name: 'Goerli Testnet' },
-];
-
 export function ContractDeployer({ contractId, abi, bytecode }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedNetwork, setSelectedNetwork] = useState<string>('sepolia');
 
   const handleDeploy = async () => {
     if (!abi || !bytecode) {
@@ -47,7 +34,11 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
         description: "Please confirm the transaction in MetaMask...",
       });
 
+      // Deploy the contract
       const address = await deployContract(abi, bytecode);
+      if (!address) {
+        throw new Error('Failed to get deployed contract address');
+      }
 
       // Update contract in database with deployment info
       const response = await fetch(`/api/contracts/${contractId}`, {
@@ -55,7 +46,7 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           address,
-          network: selectedNetwork,
+          network: 'sepolia', // Using Sepolia as default testnet
         }),
       });
 
@@ -72,11 +63,12 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
       });
     } catch (err) {
       console.error('Deployment error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to deploy contract');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to deploy contract';
+      setError(errorMessage);
       toast({
         variant: "destructive",
         title: "Deployment failed",
-        description: err instanceof Error ? err.message : "Failed to deploy contract",
+        description: errorMessage,
       });
     } finally {
       setDeploying(false);
@@ -84,58 +76,26 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
   };
 
   return (
-    <Card className="">
-      <div className="">
-        {/* <div>
-          <h3 className="text-lg font-semibold mb-2">Deploy Contract</h3>
-          <p className="text-muted-foreground mb-4">
-            Deploy your compiled contract to the Ethereum testnet.
-          </p>
-        </div> */}
-
-        <div className="">
-          {/* <div>
-            <label className="text-sm font-medium mb-2 block">
-              Select Network
-            </label>
-            <Select
-              value={selectedNetwork}
-              onValueChange={setSelectedNetwork}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {NETWORKS.map((network) => (
-                  <SelectItem key={network.id} value={network.id}>
-                    {network.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div> */}
-
-          <Button
-            onClick={handleDeploy}
-            disabled={deploying || !abi || !bytecode}
-            className="w-full"
-          >
-            {deploying ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Rocket className="mr-2 h-4 w-4" />
-            )}
-            {deploying ? 'Deploying...' : 'Deploy Contract'}
-          </Button>
-        </div>
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+    <Card className="p-4">
+      <Button
+        onClick={handleDeploy}
+        disabled={deploying || !abi || !bytecode}
+        className="w-full"
+      >
+        {deploying ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Rocket className="mr-2 h-4 w-4" />
         )}
-      </div>
+        {deploying ? 'Deploying...' : 'Deploy Contract'}
+      </Button>
+
+      {error && (
+        <Alert variant="destructive" className="mt-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
     </Card>
   );
 }
