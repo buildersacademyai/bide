@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2, Terminal, Rocket } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { connectWallet, deployContract } from '@/lib/web3';
+import { connectWallet, getConnectedAccount } from '@/lib/web3';
 
 interface Props {
   sourceCode: string;
@@ -31,7 +31,6 @@ export function ContractCompiler({ sourceCode }: Props) {
     setError(null);
 
     try {
-      await connectWallet();
       const address = await deployContract(compiledContract.abi, compiledContract.bytecode);
       setDeployedAddress(address);
 
@@ -43,29 +42,32 @@ export function ContractCompiler({ sourceCode }: Props) {
       console.error('Deployment error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Deployment failed';
       setError(errorMessage);
-      toast({
-        variant: "destructive",
-        title: "Deployment failed",
-        description: errorMessage,
-      });
     } finally {
       setDeploying(false);
     }
   };
 
   const handleCompile = async () => {
-    if (!sourceCode.trim()) {
-      setError('Source code cannot be empty');
-      return;
-    }
-
-    setCompiling(true);
-    setError(null);
-
     try {
+      // Ensure wallet is connected before compilation
+      const account = await connectWallet();
+      if (!account) {
+        throw new Error('Please connect your wallet first');
+      }
+
+      if (!sourceCode.trim()) {
+        throw new Error('Source code cannot be empty');
+      }
+
+      setCompiling(true);
+      setError(null);
+
       const response = await fetch('/api/compile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-wallet-address': account
+        },
         body: JSON.stringify({ sourceCode })
       });
 
