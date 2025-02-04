@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
+import { apiRequest } from '@/lib/queryClient';
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -34,7 +35,7 @@ interface Contract {
   type: 'file' | 'folder';
   path: string;
   parentId: number | null;
-  sourceCode?: string;
+  source_code?: string;
   bytecode?: string;
 }
 
@@ -52,34 +53,18 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [itemToDelete, setItemToDelete] = useState<Contract | null>(null);
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
 
-  const { data: contracts = [], isLoading } = useQuery<Contract[]>({
+  // Get all contracts
+  const { data: contracts = [], isLoading } = useQuery({
     queryKey: ['/api/contracts'],
-    select: (data) => data.filter(contract => 
-      // Show all folders and files
-      contract.type === 'folder' || contract.type === 'file'
-    ),
-    onError: (error) => {
-      toast({
-        variant: "destructive",
-        title: "Failed to load contracts",
-        description: error instanceof Error ? error.message : "Failed to fetch contracts",
-      });
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/contracts');
+      return res.json();
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (newContract: Partial<Contract>) => {
-      const res = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newContract),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Failed to create item');
-      }
-
+      const res = await apiRequest('POST', '/api/contracts', newContract);
       return res.json();
     },
     onSuccess: () => {
@@ -101,13 +86,69 @@ export function FileExplorer({ onFileSelect }: Props) {
     },
   });
 
+  const handleFileCreate = async (parentId: string | null = null) => {
+    if (!newItemName) return;
+
+    const path = parentId ? `${parentId}/${newItemName}` : newItemName;
+    const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
+    const contractName = fileName.replace('.sol', '');
+
+    const sourceCode = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract ${contractName} {
+    string public message;
+
+    constructor() {
+        message = "Hello, Blockchain!";
+    }
+
+    function setMessage(string memory newMessage) public {
+        message = newMessage;
+    }
+
+    function getMessage() public view returns (string memory) {
+        return message;
+    }
+}`;
+
+    try {
+      // Create the contract file
+      await createMutation.mutateAsync({
+        name: fileName,
+        type: 'file',
+        path,
+        parentId: parentId ? parseInt(parentId) : null,
+        source_code: sourceCode,
+      });
+    } catch (error) {
+      console.error('Error creating file:', error);
+      toast({
+        variant: "destructive",
+        title: "Failed to create file",
+        description: error instanceof Error ? error.message : "An error occurred",
+      });
+    }
+  };
+
+  const handleFolderCreate = async (parentId: string | null = null) => {
+    if (!newItemName) return;
+
+    const path = parentId ? `${parentId}/${newItemName}` : newItemName;
+
+    await createMutation.mutateAsync({
+      name: newItemName,
+      type: 'folder',
+      path,
+      parentId: parentId ? parseInt(parentId) : null,
+    });
+
+    setExpandedFolders(prev => new Set([...Array.from(prev), path]));
+  };
+
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<Contract> }) => {
-      const res = await fetch(`/api/contracts/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+      const res = await apiRequest(`PATCH`, `/api/contracts/${id}`, data);
       if (!res.ok) throw new Error('Failed to update item');
       return res.json();
     },
@@ -129,9 +170,7 @@ export function FileExplorer({ onFileSelect }: Props) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/contracts/${id}`, {
-        method: 'DELETE',
-      });
+      const res = await apiRequest('DELETE', `/api/contracts/${id}`);
       if (!res.ok) throw new Error('Failed to delete item');
       return res.json();
     },
@@ -161,82 +200,6 @@ export function FileExplorer({ onFileSelect }: Props) {
     setExpandedFolders(newExpanded);
   };
 
-  const handleFileCreate = async (parentId: string | null = null) => {
-    if (!newItemName) return;
-  
-    const path = parentId ? `${parentId}/${newItemName}` : newItemName;
-    const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
-    const contractName = fileName.replace('.sol', '');
-  
-    const sourceCode = `// SPDX-License-Identifier: MIT
-  pragma solidity ^0.8.0;
-  
-  contract ${contractName} {
-      string public message;
-  
-      constructor() {
-          message = "Hello, Blockchain!";
-      }
-  
-      function setMessage(string memory newMessage) public {
-          message = newMessage;
-      }
-  
-      function getMessage() public view returns (string memory) {
-          return message;
-      }
-  }`;
-  
-    try {
-      // First check if root folder exists
-      const rootResponse = await fetch('/api/contracts?type=folder&name=Contracts');
-      let rootFolder = await rootResponse.json();
-  
-      let effectiveParentId = parentId;
-  
-      // If no root folder exists or no parent specified, create root folder
-      if (!rootFolder || (!parentId && rootFolder.length === 0)) {
-        const rootFolderResponse = await fetch('/api/contracts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: 'Contracts',
-            type: 'folder',
-            path: '',
-            parentId: null
-          })
-        });
-        rootFolder = await rootFolderResponse.json();
-        effectiveParentId = rootFolder.id.toString();
-      }
-  
-      // Create the contract file
-      await createMutation.mutateAsync({
-        name: fileName,
-        type: 'file',
-        path,
-        parentId: effectiveParentId ? parseInt(effectiveParentId) : null,
-        sourceCode,
-      });
-    } catch (error) {
-      console.error('Error creating file:', error);
-    }
-  };
-
-  const handleFolderCreate = async (parentId: string | null = null) => {
-    if (!newItemName) return;
-
-    const path = parentId ? `${parentId}/${newItemName}` : newItemName;
-
-    await createMutation.mutateAsync({
-      name: newItemName,
-      type: 'folder',
-      path,
-      parentId: parentId ? parseInt(parentId) : null,
-    });
-
-    setExpandedFolders(prev => new Set([...Array.from(prev), path]));
-  };
 
   const handleDelete = async () => {
     if (!itemToDelete) return;
@@ -276,8 +239,8 @@ export function FileExplorer({ onFileSelect }: Props) {
               onClick={() => {
                 if (item.type === 'folder') {
                   toggleFolder(item.id.toString());
-                } else if (item.sourceCode) {
-                  onFileSelect(item.sourceCode, item.id);
+                } else if (item.source_code) {
+                  onFileSelect(item.source_code, item.id);
                   toast({
                     title: "File loaded",
                     description: `Loaded ${item.name} into editor`,
@@ -341,15 +304,6 @@ export function FileExplorer({ onFileSelect }: Props) {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="w-64 border-r h-full bg-muted/30 flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-
   return (
     <div className="w-64 border-r h-full bg-muted/30">
       <div className="p-4 border-b bg-background">
@@ -373,7 +327,7 @@ export function FileExplorer({ onFileSelect }: Props) {
                 placeholder={isCreatingFile ? "MyContract.sol" : "New Folder"}
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
-                 onKeyDown={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     if (isCreatingFile) {
                       handleFileCreate(selectedFolder);
@@ -383,7 +337,7 @@ export function FileExplorer({ onFileSelect }: Props) {
                   }
                 }}
               />
-              <Button 
+              <Button
                 className="w-full"
                 onClick={() => {
                   if (isCreatingFile) {
@@ -399,8 +353,8 @@ export function FileExplorer({ onFileSelect }: Props) {
           </DialogContent>
         </Dialog>
 
-        <Dialog 
-          open={itemToRename !== null} 
+        <Dialog
+          open={itemToRename !== null}
           onOpenChange={(open) => !open && setItemToRename(null)}
         >
           <DialogContent>
@@ -419,7 +373,7 @@ export function FileExplorer({ onFileSelect }: Props) {
           </DialogContent>
         </Dialog>
 
-        <AlertDialog 
+        <AlertDialog
           open={itemToDelete !== null}
           onOpenChange={(open) => !open && setItemToDelete(null)}
         >
@@ -438,13 +392,19 @@ export function FileExplorer({ onFileSelect }: Props) {
         </AlertDialog>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-10rem)]">
-        <div className="p-2">
-          {contracts
-            .filter(item => item.parentId === null)
-            .map(item => renderItem(item))}
+      {isLoading ? (
+        <div className="flex items-center justify-center p-4">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
-      </ScrollArea>
+      ) : (
+        <ScrollArea className="h-[calc(100vh-10rem)]">
+          <div className="p-2">
+            {contracts
+              .filter(item => !item.parentId)
+              .map(item => renderItem(item))}
+          </div>
+        </ScrollArea>
+      )}
     </div>
   );
 }
