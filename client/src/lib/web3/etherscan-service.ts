@@ -38,6 +38,15 @@ export class EtherscanService {
         throw new Error(`Contract name '${actualContractName}' not found in source code`);
       }
 
+      // Extract the solidity version from the source code
+      const versionMatch = sourceCode.match(/pragma solidity (\^?\d+\.\d+\.\d+)/);
+      if (!versionMatch) {
+        throw new Error('Could not determine Solidity version from source code');
+      }
+
+      // Get the exact compiler version for the detected Solidity version
+      const compilerVersion = `v${versionMatch[1].replace('^', '')}+commit.a1b79de6`;
+
       const response = await axios.post(
         `https://api-${network}.etherscan.io/api`,
         null,
@@ -50,10 +59,10 @@ export class EtherscanService {
             sourceCode,
             contractname: actualContractName,
             codeformat: 'solidity-single-file',
-            compilerversion: 'v0.8.20+commit.a1b79de6', // Making this more specific
-            optimizationUsed: 1,
+            compilerversion: compilerVersion,
+            optimizationUsed: 0, // Set to 0 for no optimization
             runs: 200,
-            evmversion: 'london',
+            evmversion: 'paris', // Use 'paris' for better compatibility
             licenseType: 1 // MIT License
           },
         }
