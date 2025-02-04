@@ -1,53 +1,25 @@
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { UserProfile } from "@/components/UserProfile";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Web3AuthService } from "@/lib/web3/auth-service";
+import { UserProfile } from "./UserProfile";
+import { useQuery } from "@tanstack/react-query";
+import { getConnectedAccount, connectWallet } from "@/lib/web3";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { useEffect } from "react";
 
 export function Navigation() {
   const [location] = useLocation();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const isAppPage = location === "/app";
 
   const { data: address, isLoading } = useQuery({ 
     queryKey: ['wallet'],
-    queryFn: Web3AuthService.getCurrentAddress,
-    refetchOnWindowFocus: true,
-    retry: false
+    queryFn: getConnectedAccount,
+    refetchOnWindowFocus: true
   });
-
-  useEffect(() => {
-    // Listen for network changes
-    const handleNetworkChange = () => {
-      queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      toast({
-        title: "Network changed",
-        description: "Connected to new network",
-      });
-    };
-
-    // Listen for account changes
-    const handleAccountChange = () => {
-      queryClient.invalidateQueries({ queryKey: ['wallet'] });
-    };
-
-    window.addEventListener('networkChanged', handleNetworkChange);
-    window.addEventListener('accountChanged', handleAccountChange);
-
-    return () => {
-      window.removeEventListener('networkChanged', handleNetworkChange);
-      window.removeEventListener('accountChanged', handleAccountChange);
-    };
-  }, [queryClient, toast]);
 
   const handleConnect = async () => {
     try {
-      await Web3AuthService.connect();
-      await queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      await connectWallet();
       toast({
         title: "Connected to wallet",
         description: "Successfully connected to MetaMask",
@@ -66,8 +38,8 @@ export function Navigation() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <Button variant="ghost" className="p-0" asChild>
-              <a href="/" className="flex items-center gap-2">
+            <Link href="/">
+              <a className="flex items-center transition-colors hover:text-primary">
                 <svg
                   className="h-8 w-8 text-primary"
                   viewBox="0 0 24 24"
@@ -81,20 +53,24 @@ export function Navigation() {
                   <line x1="16" y1="8" x2="2" y2="22" />
                   <line x1="17.5" y1="15" x2="9" y2="15" />
                 </svg>
-                <span className="text-xl font-bold">Blockchain IDE</span>
+                <span className="ml-2 text-xl font-bold">Blockchain IDE</span>
               </a>
-            </Button>
+            </Link>
           </div>
 
           <div className="flex items-center gap-4">
-            <Button variant="ghost" className="p-0" asChild>
-              <a href="/about">About Us</a>
-            </Button>
+            <Link href="/about">
+              <a className="text-sm font-medium transition-colors hover:text-primary">
+                About Us
+              </a>
+            </Link>
 
             {!isAppPage && (
-              <Button variant="default" asChild>
-                <a href="/app">Launch App</a>
-              </Button>
+              <Link href="/app">
+                <Button className="bg-primary hover:bg-primary/90">
+                  Launch App
+                </Button>
+              </Link>
             )}
 
             {isLoading ? (
@@ -102,7 +78,7 @@ export function Navigation() {
             ) : address ? (
               <UserProfile address={address} />
             ) : (
-              <Button onClick={handleConnect} variant="default">
+              <Button onClick={handleConnect} className="gap-2">
                 Connect Wallet
               </Button>
             )}

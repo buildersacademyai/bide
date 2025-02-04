@@ -2,60 +2,26 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { contracts } from "@db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import solc from 'solc';
-import { authenticate, login, type AuthRequest } from './auth';
 
 export function registerRoutes(app: Express): Server {
-  // Add CORS headers for development
-  app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
-    }
-    next();
-  });
-
-  // Auth routes
-  app.post("/api/login", async (req, res) => {
-    try {
-      const { wallet_address } = req.body;
-      if (!wallet_address) {
-        return res.status(400).json({ message: "Wallet address is required" });
-      }
-
-      const { user, token } = await login(wallet_address);
-      res.json({ user, token });
-    } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ message: "Failed to login" });
-    }
-  });
-
-  // Protected routes
-  app.use('/api/contracts', authenticate);
-  app.use('/api/compile', authenticate);
-
   // Contract CRUD operations
-  app.post("/api/compile", async (req: AuthRequest, res) => {
+  app.post("/api/compile", async (req, res) => {
     try {
       const { sourceCode, contractId } = req.body;
-      const ownerId = req.user?.id;
 
       if (!sourceCode) {
         return res.status(400).json({ message: "Source code is required" });
       }
 
-      // Compile contract
       const input = {
         language: 'Solidity',
         sources: {
           'Contract.sol': { content: sourceCode },
         },
-        settings: {
-          outputSelection: { '*': { '*': ['abi', 'evm.bytecode'] } }
+        settings: { 
+          outputSelection: { '*': { '*': ['abi', 'evm.bytecode'] } } 
         },
       };
 
@@ -68,7 +34,7 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Get contract name from source
+      // Get the contract name from source code
       const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
       const contractName = contractNameMatch ? contractNameMatch[1] : 'Contract';
 
@@ -76,19 +42,20 @@ export function registerRoutes(app: Express): Server {
       const contract = output.contracts['Contract.sol'][contractName];
 
       if (contractId) {
-        // Update existing contract
+        // Update existing contract with new compilation results
         const [updatedContract] = await db.update(contracts)
           .set({
-            source_code: sourceCode,
+            sourceCode,
             abi: contract.abi,
             bytecode: contract.evm.bytecode.object,
-            updated_at: new Date()
+            updatedAt: new Date()
           })
-          .where(and(
-            eq(contracts.id, contractId),
-            eq(contracts.owner_id, ownerId!)
-          ))
+          .where(eq(contracts.id, contractId))
           .returning();
+
+        if (!updatedContract) {
+          return res.status(404).json({ message: "Contract not found" });
+        }
 
         res.json({
           abi: contract.abi,
@@ -96,16 +63,16 @@ export function registerRoutes(app: Express): Server {
           contract: updatedContract
         });
       } else {
-        // Create new contract
+        // Create new contract file entry
         const [savedContract] = await db.insert(contracts)
           .values({
             name: `${contractName}.sol`,
-            source_code: sourceCode,
+            type: 'file',
+            sourceCode,
             abi: contract.abi,
             bytecode: contract.evm.bytecode.object,
-            owner_id: ownerId!,
-            created_at: new Date(),
-            updated_at: new Date()
+            createdAt: new Date(),
+            updatedAt: new Date()
           })
           .returning();
 
@@ -117,118 +84,170 @@ export function registerRoutes(app: Express): Server {
       }
     } catch (err) {
       console.error('Compilation error:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to compile contract",
         details: err instanceof Error ? err.message : String(err)
       });
     }
   });
 
-  // Get user's contracts
-  app.get("/api/contracts", async (req: AuthRequest, res) => {
+  app.post("/api/contracts", async (req, res) => {
     try {
-      const userId = req.user?.id;
-      const type = req.query.type as string;
+      const newContract = {
+        name: req.body.name,
+        type: req.body.type || 'file',
+        path: req.body.path || '',
+        parentId: req.body.parentId || null,
+        sourceCode: req.body.sourceCode || null,
+        abi: req.body.abi || null,
+        bytecode: req.body.bytecode || null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
 
-      let query = db.select().from(contracts).where(eq(contracts.owner_id, userId!));
+      // Check if we need to create root folder first
+      if (newContract.parentId) {
+        const parentFolder = await db.query.contracts.findFirst({
+          where: eq(contracts.id, newContract.parentId),
+        });
+
+        if (!parentFolder) {
+          // Create root folder first
+          const [rootFolder] = await db.insert(contracts).values({
+            name: 'Contracts',
+            type: 'folder',
+            path: '',
+            parentId: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }).returning();
+
+          // Update the parent id to the newly created folder
+          newContract.parentId = rootFolder.id;
+        }
+      }
+
+      const [contract] = await db.insert(contracts)
+        .values(newContract)
+        .returning();
+
+      res.json(contract);
+    } catch (err) {
+      console.error('Error creating contract:', err);
+      res.status(500).json({ 
+        message: "Failed to create contract",
+        details: err instanceof Error ? err.message : String(err)
+      });
+    }
+  });
+
+  app.get("/api/contracts", async (req, res) => {
+    try {
+      const type = req.query.type as string;
+      const name = req.query.name as string;
+
+      let query = db.select().from(contracts);
 
       if (type) {
         query = query.where(eq(contracts.type, type));
       }
+      if (name) {
+        query = query.where(eq(contracts.name, name));
+      }
 
-      const userContracts = await query.orderBy(contracts.created_at);
-      res.json(userContracts);
-    } catch (error) {
-      console.error('Error fetching contracts:', error);
+      const allContracts = await query.orderBy(desc(contracts.createdAt));
+      res.json(allContracts);
+    } catch (err) {
+      console.error('Error fetching contracts:', err);
       res.status(500).json({ message: "Failed to fetch contracts" });
     }
   });
 
-  // Create contract
-  app.post("/api/contracts", async (req: AuthRequest, res) => {
+  app.get("/api/contracts/:id", async (req, res) => {
     try {
-      const userId = req.user?.id;
-      const [contract] = await db.insert(contracts)
-        .values({
-          ...req.body,
-          owner_id: userId!,
-          created_at: new Date(),
-          updated_at: new Date()
-        })
-        .returning();
-
-      res.json(contract);
-    } catch (error) {
-      console.error('Error creating contract:', error);
-      res.status(500).json({ message: "Failed to create contract" });
-    }
-  });
-
-  // Get single contract
-  app.get("/api/contracts/:id", async (req: AuthRequest, res) => {
-    try {
-      const userId = req.user?.id;
       const contract = await db.query.contracts.findFirst({
-        where: and(
-          eq(contracts.id, parseInt(req.params.id)),
-          eq(contracts.owner_id, userId!)
-        ),
+        where: eq(contracts.id, parseInt(req.params.id)),
       });
 
       if (!contract) {
+        console.error(`Contract not found with ID: ${req.params.id}`);
         return res.status(404).json({ message: "Contract not found" });
       }
 
-      res.json(contract);
-    } catch (error) {
-      console.error('Error fetching contract:', error);
-      res.status(500).json({ message: "Failed to fetch contract" });
+      // Check if source code exists
+      if (!contract.sourceCode) {
+        console.error(`Contract found but no source code for ID: ${req.params.id}`);
+        return res.status(404).json({ message: "Contract source code not found" });
+      }
+
+      // Log successful retrieval
+      console.log(`Successfully retrieved contract ${req.params.id} with source code`);
+
+      res.json({
+        ...contract,
+        source: contract.sourceCode // Ensure source field is included
+      });
+    } catch (err) {
+      console.error('Error fetching contract:', err);
+      res.status(500).json({ 
+        message: "Failed to fetch contract",
+        details: err instanceof Error ? err.message : String(err)
+      });
     }
   });
 
-  // Update contract
-  app.patch("/api/contracts/:id", async (req: AuthRequest, res) => {
+  app.patch("/api/contracts/:id", async (req, res) => {
     try {
-      const userId = req.user?.id;
-      const [contract] = await db
+      const contract = await db
         .update(contracts)
         .set({
           ...req.body,
-          updated_at: new Date(),
+          updatedAt: new Date(),
         })
-        .where(and(
-          eq(contracts.id, parseInt(req.params.id)),
-          eq(contracts.owner_id, userId!)
-        ))
+        .where(eq(contracts.id, parseInt(req.params.id)))
         .returning();
 
-      if (!contract) {
-        return res.status(404).json({ message: "Contract not found or unauthorized" });
+      if (!contract.length) {
+        return res.status(404).json({ message: "Contract not found" });
       }
-      res.json(contract);
-    } catch (error) {
+      res.json(contract[0]);
+    } catch (err) {
       res.status(500).json({ message: "Failed to update contract" });
     }
   });
 
-  // Delete contract
-  app.delete("/api/contracts/:id", async (req: AuthRequest, res) => {
+  app.delete("/api/contracts/:id", async (req, res) => {
     try {
-      const userId = req.user?.id;
-      const [contract] = await db.delete(contracts)
-        .where(and(
-          eq(contracts.id, parseInt(req.params.id)),
-          eq(contracts.owner_id, userId!)
-        ))
-        .returning();
+      // First fetch the contract to check if it has compiled files
+      const [contractToDelete] = await db.query.contracts.findMany({
+        where: eq(contracts.id, parseInt(req.params.id)),
+      });
 
-      if (!contract) {
-        return res.status(404).json({ message: "Contract not found or unauthorized" });
+      if (!contractToDelete) {
+        return res.status(404).json({ message: "Contract not found" });
       }
 
-      res.json(contract);
-    } catch (error) {
-      console.error('Delete error:', error);
+      // Delete all child contracts recursively
+      const children = await db.query.contracts.findMany({
+        where: eq(contracts.parentId, parseInt(req.params.id)),
+      });
+
+      for (const child of children) {
+        await db.delete(contracts).where(eq(contracts.id, child.id));
+      }
+
+      // Then delete the contract itself
+      const [deletedContract] = await db.delete(contracts)
+        .where(eq(contracts.id, parseInt(req.params.id)))
+        .returning();
+
+      if (!deletedContract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      res.json(deletedContract);
+    } catch (err) {
+      console.error('Delete error:', err);
       res.status(500).json({ message: "Failed to delete contract" });
     }
   });

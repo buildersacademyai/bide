@@ -23,24 +23,16 @@ export function TransactionHistory({ address }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
-
-  // Initialize provider
-  useEffect(() => {
-    if (window.ethereum) {
-      const newProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
-      setProvider(newProvider);
-    }
-  }, []);
 
   useEffect(() => {
     async function fetchTransactions() {
-      if (!address || !provider) return;
+      if (!address || !window.ethereum) return;
 
       setIsLoading(true);
       setError(null);
 
       try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
         const currentBlock = await provider.getBlockNumber();
         const lastBlock = Math.max(0, currentBlock - 100); // Get last 100 blocks
 
@@ -49,11 +41,11 @@ export function TransactionHistory({ address }: Props) {
           txPromises.push(provider.getBlock(i));
         }
 
-        const blocks = (await Promise.all(txPromises)).filter((block): block is Block => block !== null);
+        const blocks = await Promise.all(txPromises);
         const formattedTransactions: Transaction[] = [];
 
         for (const block of blocks) {
-          if (!block.transactions) continue;
+          if (!block || !block.transactions) continue;
 
           // Get full transaction objects for each hash
           const txResponses = await Promise.all(
@@ -62,13 +54,12 @@ export function TransactionHistory({ address }: Props) {
             )
           );
 
-          const relevantTxs = txResponses.filter((tx): tx is TransactionResponse => {
-            if (!tx) return false;
-            const matchesAddress = 
+          const relevantTxs = txResponses.filter((tx): tx is TransactionResponse => 
+            tx !== null && (
               tx.from.toLowerCase() === address.toLowerCase() || 
-              (tx.to && tx.to.toLowerCase() === address.toLowerCase());
-            return matchesAddress;
-          });
+              (tx.to && tx.to.toLowerCase() === address.toLowerCase())
+            )
+          );
 
           for (const tx of relevantTxs) {
             formattedTransactions.push({
@@ -96,22 +87,7 @@ export function TransactionHistory({ address }: Props) {
     }
 
     fetchTransactions();
-  }, [address, provider, toast]);
-
-  // Listen for network changes
-  useEffect(() => {
-    const handleNetworkChange = () => {
-      if (window.ethereum) {
-        const newProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
-        setProvider(newProvider);
-      }
-    };
-
-    window.addEventListener('networkChanged', handleNetworkChange);
-    return () => {
-      window.removeEventListener('networkChanged', handleNetworkChange);
-    };
-  }, []);
+  }, [address, toast]);
 
   if (!address) {
     return (
