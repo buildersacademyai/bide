@@ -16,11 +16,15 @@ export async function apiRequest(
   const address = localStorage.getItem('wallet_address');
   const chainId = localStorage.getItem('chain_id');
 
+  if (!address) {
+    throw new Error('Wallet not connected');
+  }
+
   const res = await fetch(url, {
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
-      ...(address ? { "x-owner-address": address } : {}),
+      "x-owner-address": address,
       ...(chainId ? { "x-chain-id": chainId } : {}),
       ...headers
     },
@@ -41,12 +45,15 @@ export const getQueryFn: <T>(options: {
     try {
       const address = localStorage.getItem('wallet_address');
       const chainId = localStorage.getItem('chain_id');
-      const headers: Record<string, string> = {};
 
-      // Always include wallet address in API requests for data filtering
-      if (address) {
-        headers['x-owner-address'] = address;
+      if (!address) {
+        throw new Error('Wallet not connected');
       }
+
+      const headers: Record<string, string> = {
+        "x-owner-address": address,
+      };
+
       if (chainId) {
         headers['x-chain-id'] = chainId;
       }

@@ -8,14 +8,38 @@ import solc from 'solc';
 // Middleware to ensure user is authenticated with MetaMask
 const requireAuth = (req: any, res: any, next: any) => {
   const ownerAddress = req.headers['x-owner-address'];
+  const chainId = req.headers['x-chain-id'];
+
   if (!ownerAddress) {
+    console.error('Authentication failed: No wallet address provided');
     return res.status(401).json({ message: "Authentication required" });
   }
-  req.ownerAddress = ownerAddress;
+
+  // Validate ethereum address format
+  const ethAddressRegex = /^0x[a-fA-F0-9]{40}$/;
+  if (!ethAddressRegex.test(ownerAddress)) {
+    console.error('Authentication failed: Invalid wallet address format');
+    return res.status(401).json({ message: "Invalid wallet address format" });
+  }
+
+  // Add validated data to request object
+  req.ownerAddress = ownerAddress.toLowerCase(); // Normalize address
+  req.chainId = chainId;
   next();
 };
 
 export function registerRoutes(app: Express): Server {
+  // Add CORS headers for development
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, x-owner-address, x-chain-id');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Add authentication middleware for all contract routes
   app.use('/api/contracts', requireAuth);
   app.use('/api/compile', requireAuth);
