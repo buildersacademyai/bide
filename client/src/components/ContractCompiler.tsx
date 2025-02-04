@@ -94,7 +94,6 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
       return;
     }
 
-    // Skip if code hasn't changed since last compilation
     if (sourceCode === lastCompiledCode) {
       toast({
         title: "No changes detected",
@@ -169,47 +168,50 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
     }
   };
 
+  const renderActionButton = () => {
+    if (deploying) {
+      return (
+        <Button disabled className="flex-1">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Deploying...
+        </Button>
+      );
+    }
+
+    if (compiledContract && !compiling) {
+      return (
+        <Button onClick={handleDeploy} disabled={!connectedWallet} className="flex-1">
+          <Rocket className="mr-2 h-4 w-4" />
+          Deploy Contract
+        </Button>
+      );
+    }
+
+    return (
+      <Button 
+        onClick={handleCompile} 
+        disabled={compiling || !sourceCode.trim() || !connectedWallet}
+        className="flex-1"
+      >
+        {compiling ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Terminal className="mr-2 h-4 w-4" />
+        )}
+        {!connectedWallet 
+          ? 'Connect Wallet to Compile' 
+          : compiling 
+            ? 'Compiling...' 
+            : 'Compile Contract'
+        }
+      </Button>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <Button 
-          onClick={handleCompile} 
-          disabled={compiling || !sourceCode.trim() || !connectedWallet}
-          className="flex-1"
-        >
-          {compiling ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Terminal className="mr-2 h-4 w-4" />
-          )}
-          {!connectedWallet 
-            ? 'Connect Wallet to Compile' 
-            : compiling 
-              ? 'Compiling...' 
-              : 'Compile Contract'
-          }
-        </Button>
-
-        {compiledContract && !deploying && (
-          <Button
-            onClick={handleDeploy}
-            disabled={!connectedWallet}
-            className="flex-1"
-          >
-            <Rocket className="mr-2 h-4 w-4" />
-            Deploy Contract
-          </Button>
-        )}
-
-        {deploying && (
-          <Button
-            disabled
-            className="flex-1"
-          >
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Deploying...
-          </Button>
-        )}
+        {renderActionButton()}
       </div>
 
       {error && (
