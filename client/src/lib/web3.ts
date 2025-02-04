@@ -7,6 +7,7 @@ declare global {
 }
 
 let provider: ethers.BrowserProvider | null = null;
+let currentChainId: string | null = null;
 
 // Network configurations
 const SUPPORTED_NETWORKS = {
@@ -31,19 +32,37 @@ export async function connectWallet() {
 
     // Get current network
     const network = await provider.getNetwork();
+    const chainId = await provider.send("eth_chainId", []);
+    currentChainId = chainId;
     console.log('Connected to network:', network.name);
 
-    // Setup network change handler
-    window.ethereum.on('chainChanged', (chainId: string) => {
-      console.log('Network changed to:', chainId);
-      // Reload the page on network change as recommended by MetaMask
-      window.location.reload();
+    // Setup network change handler with debounce
+    let networkChangeTimeout: NodeJS.Timeout;
+    window.ethereum.on('chainChanged', (newChainId: string) => {
+      // Clear any pending timeout
+      if (networkChangeTimeout) {
+        clearTimeout(networkChangeTimeout);
+      }
+
+      // Only reload if the chain actually changed
+      if (newChainId !== currentChainId) {
+        console.log('Network changed from:', currentChainId, 'to:', newChainId);
+        currentChainId = newChainId;
+
+        // Debounce the reload
+        networkChangeTimeout = setTimeout(() => {
+          window.location.reload();
+        }, 1000); // Wait 1 second before reloading
+      }
     });
 
     // Setup account change handler
     window.ethereum.on('accountsChanged', (accounts: string[]) => {
       console.log('Account changed:', accounts[0]);
-      window.location.reload();
+      // Only reload if we actually have a new account
+      if (accounts[0]) {
+        window.location.reload();
+      }
     });
 
     return accounts[0];
@@ -71,7 +90,16 @@ export async function getConnectedAccount() {
       console.log('Current network:', network.name);
 
       const chainId = await provider.send("eth_chainId", []);
+      currentChainId = chainId;
       console.log('Chain ID:', chainId);
+
+      // Verify if the network is supported
+      const isSupportedNetwork = Object.values(SUPPORTED_NETWORKS)
+        .some(net => net.chainId.toLowerCase() === chainId.toLowerCase());
+
+      if (!isSupportedNetwork) {
+        console.warn('Warning: Connected to unsupported network');
+      }
     }
 
     return accounts[0] || null;
