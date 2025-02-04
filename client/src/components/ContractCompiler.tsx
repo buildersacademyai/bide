@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2, Terminal, Rocket } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { connectWallet, getConnectedAccount } from '@/lib/web3';
+import { connectWallet, getConnectedAccount, deployContract } from '@/lib/web3';
 
 interface Props {
   sourceCode: string;
@@ -31,6 +31,10 @@ export function ContractCompiler({ sourceCode }: Props) {
     setError(null);
 
     try {
+      // Ensure wallet is connected
+      await connectWallet();
+
+      // Deploy contract
       const address = await deployContract(compiledContract.abi, compiledContract.bytecode);
       setDeployedAddress(address);
 
@@ -42,6 +46,11 @@ export function ContractCompiler({ sourceCode }: Props) {
       console.error('Deployment error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Deployment failed';
       setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Deployment failed",
+        description: errorMessage,
+      });
     } finally {
       setDeploying(false);
     }
