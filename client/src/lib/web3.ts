@@ -121,36 +121,38 @@ export async function deployContract(abi: any[], bytecode: string) {
   try {
     // Get the signer
     const signer = await provider.getSigner();
-    const account = await signer.getAddress();
 
     // Create contract factory
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
 
-    // Deploy with better error handling
-    const contract = await factory.deploy({
-      headers: {
-        'x-wallet-address': account
+    // Deploy contract
+    const contract = await factory.deploy();
+
+    // Wait for deployment with timeout and retry
+    const maxRetries = 3;
+    let currentRetry = 0;
+
+    while (currentRetry < maxRetries) {
+      try {
+        const deployed = await contract.waitForDeployment();
+        const address = await contract.getAddress();
+
+        // Verify the deployment
+        const code = await provider.getCode(address);
+        if (code === '0x') {
+          throw new Error('Contract deployment failed - no code at address');
+        }
+
+        return address;
+      } catch (retryError) {
+        currentRetry++;
+        if (currentRetry === maxRetries) {
+          throw retryError;
+        }
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, currentRetry)));
       }
-    });
-
-    // Wait for deployment with timeout
-    const deploymentTimeout = 120000; // 2 minutes
-    const deployed = await Promise.race([
-      contract.waitForDeployment(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Deployment timed out')), deploymentTimeout)
-      )
-    ]);
-
-    const address = await contract.getAddress();
-
-    // Verify the deployment
-    const code = await provider.getCode(address);
-    if (code === '0x') {
-      throw new Error('Contract deployment failed - no code at address');
     }
-
-    return address;
   } catch (error: any) {
     console.error('Deployment error:', error);
 
