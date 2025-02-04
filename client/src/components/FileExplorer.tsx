@@ -3,13 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -92,6 +92,7 @@ export function FileExplorer({ onFileSelect }: Props) {
     };
   }, [queryClient, toast]);
 
+  // Update the query filtering logic
   const { data: contracts = [], isLoading } = useQuery<Contract[]>({
     queryKey: ['/api/contracts', connectedAddress],
     queryFn: async () => {
@@ -108,18 +109,19 @@ export function FileExplorer({ onFileSelect }: Props) {
           return [];
         }
 
-        // Show all folders and files owned by the user
-        return data.filter((contract: Contract) => 
-          contract.type === 'folder' || // Show all folders
-          !contract.ownerAddress || // Show unowned files
-          contract.ownerAddress === connectedAddress // Show user's files
-        );
+        // Strict filtering:
+        // 1. Show folders only if they're root folders or user created them
+        // 2. Show files only if user owns them
+        return data.filter((contract: Contract) => (
+          (contract.type === 'folder' && (!contract.ownerAddress || contract.ownerAddress === connectedAddress)) || // Show root folders and user's folders
+          (contract.type === 'file' && contract.ownerAddress === connectedAddress) // Only show user's files
+        ));
       } catch (error) {
         console.error('Error fetching contracts:', error);
         return [];
       }
     },
-    enabled: true,
+    enabled: !!connectedAddress, // Only fetch when wallet is connected
     staleTime: 1000 * 30, // Cache for 30 seconds
   });
 
@@ -460,7 +462,7 @@ export function FileExplorer({ onFileSelect }: Props) {
                 placeholder={isCreatingFile ? "MyContract.sol" : "New Folder"}
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
-                 onKeyDown={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     if (isCreatingFile) {
                       handleFileCreate(selectedFolder);
@@ -470,7 +472,7 @@ export function FileExplorer({ onFileSelect }: Props) {
                   }
                 }}
               />
-              <Button 
+              <Button
                 className="w-full"
                 onClick={() => {
                   if (isCreatingFile) {
@@ -486,8 +488,8 @@ export function FileExplorer({ onFileSelect }: Props) {
           </DialogContent>
         </Dialog>
 
-        <Dialog 
-          open={itemToRename !== null} 
+        <Dialog
+          open={itemToRename !== null}
           onOpenChange={(open) => !open && setItemToRename(null)}
         >
           <DialogContent>
@@ -506,7 +508,7 @@ export function FileExplorer({ onFileSelect }: Props) {
           </DialogContent>
         </Dialog>
 
-        <AlertDialog 
+        <AlertDialog
           open={itemToDelete !== null}
           onOpenChange={(open) => !open && setItemToDelete(null)}
         >

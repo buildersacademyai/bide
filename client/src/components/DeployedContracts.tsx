@@ -28,30 +28,36 @@ export function DeployedContracts() {
     checkWallet();
   }, []);
 
+  // Update the query filtering logic
   const { data: contracts = [], isLoading } = useQuery<DeployedContract[]>({
-    queryKey: ['/api/contracts'],
+    queryKey: ['/api/contracts', connectedAddress],
     queryFn: async () => {
       try {
+        if (!connectedAddress) {
+          return [];
+        }
+
         const response = await fetch('/api/contracts');
         if (!response.ok) {
           throw new Error('Failed to fetch contracts');
         }
         const data = await response.json();
 
-        // Filter for only successfully deployed contracts
+        // Strict filtering for deployed contracts:
+        // 1. Must have a valid address
+        // 2. Must be owned by the connected wallet
         return data.filter((contract: DeployedContract) => 
-          // Show only deployed contracts (with valid address) owned by the current user
           contract.address && 
-          contract.address.startsWith('0x') &&  // Ensure it's a valid Ethereum address
+          contract.address.startsWith('0x') &&  // Valid Ethereum address
           contract.address.length === 42 && // Standard Ethereum address length
-          (!contract.ownerAddress || contract.ownerAddress === connectedAddress)
+          contract.ownerAddress === connectedAddress // Must be owned by connected wallet
         );
       } catch (error) {
         console.error('Error fetching contracts:', error);
         return [];
       }
     },
-    enabled: true,
+    enabled: !!connectedAddress, // Only fetch when wallet is connected
     staleTime: 1000 * 30, // Cache for 30 seconds
   });
 
@@ -74,6 +80,7 @@ export function DeployedContracts() {
     return `${baseUrl}${address}`;
   };
 
+  // Update the no-wallet message
   if (!connectedAddress) {
     return (
       <Card className="p-6">
