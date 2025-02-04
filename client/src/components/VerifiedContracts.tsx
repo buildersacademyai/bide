@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -17,6 +17,7 @@ export function VerifiedContracts() {
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: contracts, isLoading: isLoadingContracts } = useQuery({
     queryKey: ['/api/contracts'],
@@ -54,21 +55,16 @@ export function VerifiedContracts() {
       }
 
       toast({
-        ...createToastConfig({
-          title: "Contract verified",
-          description: "The contract has been successfully verified",
-        })
+        title: "Contract verified",
+        variant: "default"
       });
 
       // Refresh the verified contracts list
       await queryClient.invalidateQueries({ queryKey: ['/api/contracts/verified'] });
     } catch (error) {
       toast({
-        ...createToastConfig({
-          variant: "destructive",
-          title: "Verification failed",
-          description: error instanceof Error ? error.message : "Failed to verify contract",
-        })
+        variant: "destructive",
+        title: "Verification failed"
       });
     } finally {
       setIsVerifying(false);
