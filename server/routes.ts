@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { contracts } from "@db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or } from "drizzle-orm";
 import solc from 'solc';
 
 // Middleware to verify wallet ownership
@@ -165,17 +165,28 @@ export function registerRoutes(app: Express): Server {
 
       let queryConditions = [];
 
-      // For files, only return those owned by the wallet address or unowned
-      queryConditions.push(
-        type === 'file' 
-          ? and(
-              eq(contracts.type, 'file'),
-              and(
+      // If type is specified, add it to conditions
+      if (type) {
+        queryConditions.push(
+          type === 'file' 
+            ? and(
+                eq(contracts.type, 'file'),
                 eq(contracts.ownerAddress, walletAddress)
               )
+            : eq(contracts.type, type)
+        );
+      } else {
+        // If no type specified, show all folders and owned files
+        queryConditions.push(
+          or(
+            eq(contracts.type, 'folder'),
+            and(
+              eq(contracts.type, 'file'),
+              eq(contracts.ownerAddress, walletAddress)
             )
-          : eq(contracts.type, type)
-      );
+          )
+        );
+      }
 
       if (name) {
         queryConditions.push(eq(contracts.name, name));

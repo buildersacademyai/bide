@@ -133,7 +133,16 @@ export function FileExplorer({ onFileSelect }: Props) {
     queryKey: ['/api/contracts', connectedAddress],
     queryFn: async () => {
       try {
-        const response = await fetch('/api/contracts');
+        if (!connectedAddress) {
+          return [];
+        }
+
+        const response = await fetch('/api/contracts', {
+          headers: {
+            'x-wallet-address': connectedAddress
+          }
+        });
+
         if (!response.ok) {
           console.error('Failed to fetch contracts:', response.statusText);
           return [];
@@ -145,18 +154,13 @@ export function FileExplorer({ onFileSelect }: Props) {
           return [];
         }
 
-        // Show all folders and files owned by the user
-        return data.filter((contract: Contract) => 
-          contract.type === 'folder' || // Show all folders
-          !contract.ownerAddress || // Show unowned files
-          contract.ownerAddress === connectedAddress // Show user's files
-        );
+        return data;
       } catch (error) {
         console.error('Error fetching contracts:', error);
         return [];
       }
     },
-    enabled: true,
+    enabled: !!connectedAddress,
     staleTime: 1000 * 30, // Cache for 30 seconds
   });
 
@@ -500,7 +504,7 @@ contract ${contractName} {
                 placeholder={isCreatingFile ? "MyContract.sol" : "New Folder"}
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
-                 onKeyDown={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     if (isCreatingFile) {
                       handleFileCreate(selectedFolder);
