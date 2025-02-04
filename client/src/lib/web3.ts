@@ -98,10 +98,6 @@ export async function deployContract(abi: any[], bytecode: string) {
     throw new Error("Please connect your wallet first");
   }
 
-  if (!abi || !bytecode) {
-    throw new Error("Contract ABI and bytecode are required");
-  }
-
   try {
     // Get the signer
     const signer = await provider.getSigner();
@@ -112,45 +108,25 @@ export async function deployContract(abi: any[], bytecode: string) {
     console.log('Creating contract factory...');
     const factory = new ethers.ContractFactory(abi, formattedBytecode, signer);
 
-    console.log('Preparing deployment transaction...');
-    const deployTx = await factory.getDeployTransaction();
-
-    // Estimate gas with a buffer
-    console.log('Estimating gas...');
-    const gasEstimate = await provider.estimateGas({
-      data: deployTx.data,
-      from: await signer.getAddress()
-    });
-
-    // Add 30% buffer to gas estimate for safety
-    const gasLimit = (gasEstimate * BigInt(130)) / BigInt(100);
-
     console.log('Deploying contract...');
-    const contract = await factory.deploy({
-      gasLimit: gasLimit
-    });
+    const contract = await factory.deploy();
 
-    console.log('Deployment transaction submitted:', contract.deploymentTransaction()?.hash);
     console.log('Waiting for deployment confirmation...');
-
-    // Wait for deployment with specific confirmation blocks
     await contract.waitForDeployment();
 
-    // Get deployed contract address
     const address = await contract.getAddress();
     console.log('Contract deployed at:', address);
 
-    // Extra verification step
-    const deployedCode = await provider.getCode(address);
-    if (deployedCode === '0x') {
-      throw new Error('Contract deployment verification failed - no code at address');
+    // Verify contract code exists
+    const code = await provider.getCode(address);
+    if (code === '0x') {
+      throw new Error('Contract deployment failed - no code at address');
     }
 
     return address;
   } catch (error: any) {
     console.error('Deployment error:', error);
 
-    // Handle specific error cases
     if (error.code === 'INSUFFICIENT_FUNDS') {
       throw new Error('Insufficient funds for contract deployment');
     } else if (error.code === 4001) {
