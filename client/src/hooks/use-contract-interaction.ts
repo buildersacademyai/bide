@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ContractService } from '@/lib/web3/contract-service';
 import type { DeployedContract } from '@/lib/web3/types';
+import { useToast } from '@/hooks/use-toast';
+import { createToastConfig } from '@/lib/toast-config';
 
 export function useContractInteraction() {
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, string>>({});
+  const { toast } = useToast();
 
   const { data: contracts, isLoading } = useQuery({
     queryKey: ['/api/contracts'],
@@ -36,6 +39,16 @@ export function useContractInteraction() {
       functionName,
       inputs
     );
+
+    if (!result.success) {
+      toast({
+        ...createToastConfig({
+          variant: "destructive",
+          title: "Error",
+          description: result.error
+        })
+      });
+    }
 
     setResults(prev => ({
       ...prev,

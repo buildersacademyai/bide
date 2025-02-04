@@ -76,7 +76,7 @@ export class ContractService {
       );
 
       const result = await contract[functionName](...convertedInputs);
-      
+
       return {
         success: true,
         result: this.formatResult(result)

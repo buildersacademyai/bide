@@ -148,7 +148,7 @@ export default function Editor() {
         <FileExplorer onFileSelect={handleFileSelect} />
 
         <div className="flex-1 p-4 space-y-5 overflow-y-auto">
-          <div className="flex justify-between items-center">
+          {/* <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                 Smart Contract IDE
@@ -167,7 +167,7 @@ export default function Editor() {
             ) : (
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             )}
-          </div>
+          </div> */}
 
           <Tabs defaultValue="editor" className="w-full">
             <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">

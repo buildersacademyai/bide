@@ -129,7 +129,7 @@ export function ContractEditor({ value, onChange, contractId }: Props) {
   return (
     <Card className="border-2 rounded-lg overflow-hidden">
       <Editor
-        height="600px"
+        height="450px"
         defaultLanguage="sol"
         language="sol"
         theme="solidity-dark"
