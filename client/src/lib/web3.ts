@@ -109,42 +109,58 @@ export async function deployContract(abi: any[], bytecode: string) {
     // Ensure bytecode is properly formatted
     const formattedBytecode = bytecode.startsWith('0x') ? bytecode : `0x${bytecode}`;
 
-    // Create contract factory
+    console.log('Creating contract factory...');
     const factory = new ethers.ContractFactory(abi, formattedBytecode, signer);
+
+    console.log('Preparing deployment transaction...');
+    const deployTx = await factory.getDeployTransaction();
+
+    // Estimate gas with a buffer
+    console.log('Estimating gas...');
+    const gasEstimate = await provider.estimateGas({
+      data: deployTx.data,
+      from: await signer.getAddress()
+    });
+
+    // Add 30% buffer to gas estimate for safety
+    const gasLimit = (gasEstimate * BigInt(130)) / BigInt(100);
+
     console.log('Deploying contract...');
+    const contract = await factory.deploy({
+      gasLimit: gasLimit
+    });
 
-    // Deploy the contract
-    const contract = await factory.deploy();
-    console.log('Waiting for deployment...');
+    console.log('Deployment transaction submitted:', contract.deploymentTransaction()?.hash);
+    console.log('Waiting for deployment confirmation...');
 
-    // Wait for deployment to complete
+    // Wait for deployment with specific confirmation blocks
     await contract.waitForDeployment();
 
     // Get deployed contract address
     const address = await contract.getAddress();
     console.log('Contract deployed at:', address);
 
-    // Verify contract deployment
-    const code = await provider.getCode(address);
-    if (code === '0x') {
-      throw new Error('Contract deployment failed - no code at address');
+    // Extra verification step
+    const deployedCode = await provider.getCode(address);
+    if (deployedCode === '0x') {
+      throw new Error('Contract deployment verification failed - no code at address');
     }
 
     return address;
-
   } catch (error: any) {
     console.error('Deployment error:', error);
 
+    // Handle specific error cases
     if (error.code === 'INSUFFICIENT_FUNDS') {
       throw new Error('Insufficient funds for contract deployment');
     } else if (error.code === 4001) {
       throw new Error('Transaction rejected. Please confirm the transaction in MetaMask.');
-    } else if (error.message?.includes('timeout')) {
-      throw new Error('Deployment timed out. Please try again.');
-    } else if (error.message?.includes('Failed to fetch')) {
-      throw new Error('Network connection error. Please check your internet connection and try again.');
+    } else if (error.message?.includes('user rejected transaction')) {
+      throw new Error('Transaction was rejected by the user');
+    } else if (error.message?.includes('insufficient funds')) {
+      throw new Error('Insufficient funds to deploy the contract');
     } else {
-      throw new Error(`Failed to deploy contract: ${error.message || 'Unknown error'}`);
+      throw new Error(`Contract deployment failed: ${error.message || 'Unknown error'}`);
     }
   }
 }
