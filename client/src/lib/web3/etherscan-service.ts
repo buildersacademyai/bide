@@ -49,34 +49,46 @@ export class EtherscanService {
     return 'v0.8.17+commit.8df45f5f';
   }
 
+  private static getEvmVersion(sourceCode: string): string {
+    // Try to extract pragma from source code
+    const pragmaMatch = sourceCode.match(/pragma\s+solidity\s+([^;]+)/);
+    if (!pragmaMatch) return 'paris'; // Default to latest if no pragma found
+
+    const version = pragmaMatch[1].trim();
+
+    // Map Solidity versions to appropriate EVM versions
+    if (version.includes('0.8.20')) return 'paris';
+    if (version.includes('0.8.19')) return 'paris';
+    if (version.includes('0.8.18')) return 'paris';
+    if (version.includes('0.8.17')) return 'london';
+    if (version.includes('0.8.16')) return 'london';
+
+    // For older versions default to london
+    return 'london';
+  }
+
   private static async attemptVerification(
     params: Record<string, any>,
-    network: string
+    network: string,
+    evmVersion: string
   ): Promise<string> {
-    // Define all possible combinations to try
+    // Define all possible combinations to try, prioritizing the detected EVM version
     const attempts = [
-      // Hardhat default settings
-      { optimizationUsed: 1, runs: 200, evmversion: 'london' },
-      // Truffle default settings
-      { optimizationUsed: 0, runs: 200, evmversion: 'london' },
-      // Remix default settings
-      { optimizationUsed: 1, runs: 200, evmversion: 'paris' },
-      // Common deployment settings
-      { optimizationUsed: 1, runs: 1000000, evmversion: 'london' },
-      { optimizationUsed: 1, runs: 999999, evmversion: 'london' },
-      // Legacy settings
-      { optimizationUsed: 1, runs: 200, evmversion: 'berlin' },
-      { optimizationUsed: 0, runs: 200, evmversion: 'berlin' },
-      // Foundry default settings
-      { optimizationUsed: 1, runs: 200, evmversion: 'paris' },
-      { optimizationUsed: 1, runs: 1000000, evmversion: 'paris' },
-      // Try without optimization
-      { optimizationUsed: 0, runs: 0, evmversion: 'london' },
-      { optimizationUsed: 0, runs: 0, evmversion: 'paris' },
-      // Additional optimization combinations
-      { optimizationUsed: 1, runs: 500, evmversion: 'london' },
-      { optimizationUsed: 1, runs: 100000, evmversion: 'london' },
-      { optimizationUsed: 1, runs: 10000, evmversion: 'london' },
+      // Primary attempt with detected EVM version
+      { optimizationUsed: 1, runs: 200, evmversion: evmVersion },
+      { optimizationUsed: 0, runs: 200, evmversion: evmVersion },
+      // Fallback to other common settings with same EVM version
+      { optimizationUsed: 1, runs: 1000000, evmversion: evmVersion },
+      { optimizationUsed: 1, runs: 999999, evmversion: evmVersion },
+      // Only try alternative EVM versions if initial attempts fail
+      ...(evmVersion !== 'paris' ? [
+        { optimizationUsed: 1, runs: 200, evmversion: 'paris' },
+        { optimizationUsed: 0, runs: 200, evmversion: 'paris' }
+      ] : []),
+      ...(evmVersion !== 'london' ? [
+        { optimizationUsed: 1, runs: 200, evmversion: 'london' },
+        { optimizationUsed: 0, runs: 200, evmversion: 'london' }
+      ] : [])
     ];
 
     let lastError: Error | null = null;
@@ -175,13 +187,15 @@ export class EtherscanService {
         throw new Error('Could not determine Solidity version from source code');
       }
 
-      // Get supported compiler version
+      // Get supported compiler version and EVM version
       const compilerVersion = this.getSupportedCompilerVersion(versionMatch[1].trim());
+      const evmVersion = this.getEvmVersion(sourceCode);
 
       console.log('Starting contract verification with settings:', {
         address,
         contractName: actualContractName,
         compilerVersion,
+        evmVersion,
         network,
       });
 
@@ -197,7 +211,7 @@ export class EtherscanService {
         licenseType: 1, // MIT License
       };
 
-      return await this.attemptVerification(verificationParams, network);
+      return await this.attemptVerification(verificationParams, network, evmVersion);
     } catch (error) {
       if (error instanceof Error && error.message === 'NO_API_KEY') {
         throw error;
