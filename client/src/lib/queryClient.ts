@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { getConnectedAccount } from './web3';
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -12,9 +13,18 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const walletAddress = await getConnectedAccount();
+  const headers: Record<string, string> = {
+    'x-wallet-address': walletAddress || '',
+  };
+
+  if (data) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -29,8 +39,12 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    const walletAddress = await getConnectedAccount();
     const res = await fetch(queryKey[0] as string, {
       credentials: "include",
+      headers: {
+        'x-wallet-address': walletAddress || '',
+      }
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
