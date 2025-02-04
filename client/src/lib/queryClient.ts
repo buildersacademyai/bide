@@ -38,28 +38,37 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const address = localStorage.getItem('wallet_address');
-    const chainId = localStorage.getItem('chain_id');
-    const headers: Record<string, string> = {};
+    try {
+      const address = localStorage.getItem('wallet_address');
+      const chainId = localStorage.getItem('chain_id');
+      const headers: Record<string, string> = {};
 
-    if (address) {
-      headers['x-owner-address'] = address;
+      if (address) {
+        headers['x-owner-address'] = address;
+      }
+      if (chainId) {
+        headers['x-chain-id'] = chainId;
+      }
+
+      const res = await fetch(queryKey[0] as string, {
+        headers,
+        credentials: "include",
+      });
+
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+        return null;
+      }
+
+      await throwIfResNotOk(res);
+      return await res.json();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('network')) {
+        // Retry the query after a short delay for network-related errors
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        throw error; // Let React Query handle the retry
+      }
+      throw error;
     }
-    if (chainId) {
-      headers['x-chain-id'] = chainId;
-    }
-
-    const res = await fetch(queryKey[0] as string, {
-      headers,
-      credentials: "include",
-    });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
-
-    await throwIfResNotOk(res);
-    return await res.json();
   };
 
 export const queryClient = new QueryClient({
@@ -69,7 +78,13 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
-      retry: false,
+      retry: (failureCount, error) => {
+        // Retry up to 3 times for network-related errors
+        if (error instanceof Error && error.message.includes('network')) {
+          return failureCount < 3;
+        }
+        return false;
+      },
     },
     mutations: {
       retry: false,
@@ -79,6 +94,8 @@ export const queryClient = new QueryClient({
 
 // Listen for network changes and invalidate queries
 window.addEventListener('networkChanged', () => {
-  // Invalidate all queries when the network changes
-  queryClient.invalidateQueries();
+  // Add a small delay before invalidating queries to allow the network to stabilize
+  setTimeout(() => {
+    queryClient.invalidateQueries();
+  }, 500);
 });

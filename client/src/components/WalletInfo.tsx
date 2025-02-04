@@ -11,12 +11,23 @@ export function WalletInfo({ address }: Props) {
   const [balance, setBalance] = useState<string | null>(null);
   const [network, setNetwork] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
+
+  // Initialize provider
+  useEffect(() => {
+    if (window.ethereum) {
+      const newProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
+      setProvider(newProvider);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchWalletInfo = async () => {
+      if (!address || !provider) return;
+
       try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        
+        setIsLoading(true);
+
         // Get balance
         const balance = await provider.getBalance(address);
         setBalance(ethers.formatEther(balance));
@@ -31,10 +42,23 @@ export function WalletInfo({ address }: Props) {
       }
     };
 
-    if (address) {
-      fetchWalletInfo();
-    }
-  }, [address]);
+    fetchWalletInfo();
+  }, [address, provider]);
+
+  // Listen for network changes
+  useEffect(() => {
+    const handleNetworkChange = () => {
+      if (window.ethereum) {
+        const newProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
+        setProvider(newProvider);
+      }
+    };
+
+    window.addEventListener('networkChanged', handleNetworkChange);
+    return () => {
+      window.removeEventListener('networkChanged', handleNetworkChange);
+    };
+  }, []);
 
   if (isLoading) {
     return (
