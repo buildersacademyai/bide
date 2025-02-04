@@ -10,7 +10,7 @@ import { getConnectedAccount } from '@/lib/web3';
 interface DeployedContract {
   id: number;
   name: string;
-  address: string;
+  address: string | null;
   network: string;
   ownerAddress: string;
 }
@@ -118,31 +118,35 @@ export function DeployedContracts() {
                 </span>
               </TableCell>
               <TableCell>
-                <code className="px-2 py-1 bg-muted rounded text-sm">
-                  {contract.address.slice(0, 6)}...{contract.address.slice(-4)}
-                </code>
+                {contract.address && (
+                  <code className="px-2 py-1 bg-muted rounded text-sm">
+                    {contract.address.slice(0, 6)}...{contract.address.slice(-4)}
+                  </code>
+                )}
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopyAddress(contract.address, contract.id)}
-                  >
-                    {copiedAddresses[contract.id] ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open(getExplorerUrl(contract.address, contract.network), '_blank')}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </div>
+                {contract.address && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCopyAddress(contract.address!, contract.id)}
+                    >
+                      {copiedAddresses[contract.id] ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(getExplorerUrl(contract.address!, contract.network), '_blank')}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </TableCell>
             </TableRow>
           ))}
