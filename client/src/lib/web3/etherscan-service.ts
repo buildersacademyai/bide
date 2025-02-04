@@ -29,6 +29,15 @@ export class EtherscanService {
         throw new Error('Contract address is required for verification');
       }
 
+      // Extract actual contract name from the file name (remove .sol if present)
+      const actualContractName = contractName.replace('.sol', '');
+
+      // Verify the contract name exists in the source code
+      const contractMatch = sourceCode.match(/contract\s+(\w+)/);
+      if (!contractMatch || contractMatch[1] !== actualContractName) {
+        throw new Error(`Contract name '${actualContractName}' not found in source code`);
+      }
+
       const response = await axios.post(
         `https://api-${network}.etherscan.io/api`,
         null,
@@ -39,7 +48,7 @@ export class EtherscanService {
             apikey: apiKey,
             contractaddress: address,
             sourceCode,
-            contractname: contractName,
+            contractname: actualContractName,
             codeformat: 'solidity-single-file',
             compilerversion: 'v0.8.20+commit.a1b79de6', // Making this more specific
             optimizationUsed: 1,

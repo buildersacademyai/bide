@@ -163,16 +163,24 @@ export function VerifiedContracts() {
         throw new Error('Contract source code not found');
       }
 
+      // Extract the actual contract name from the source code
+      const contractNameMatch = contractSource.match(/contract\s+(\w+)/);
+      if (!contractNameMatch) {
+        throw new Error('Could not find contract name in source code');
+      }
+
+      const actualContractName = contractNameMatch[1];
+
       toast({
         title: "Starting verification",
-        description: "Verifying contract on Etherscan..."
+        description: `Verifying contract ${actualContractName} on Etherscan...`
       });
 
       // Start verification process
       const guid = await EtherscanService.verifyContract(
         contract.address,
         contractSource,
-        contract.name
+        actualContractName
       );
 
       // Poll for verification status
@@ -225,7 +233,7 @@ export function VerifiedContracts() {
     );
   }
 
-  const unverifiedContracts = contracts?.filter(c => 
+  const unverifiedContracts = contracts?.filter(c =>
     c.address && !verifiedContracts?.some(vc => vc.id === c.id)
   ) ?? [];
 
@@ -251,8 +259,8 @@ export function VerifiedContracts() {
               </SelectContent>
             </Select>
 
-            <Button 
-              onClick={startVerification} 
+            <Button
+              onClick={startVerification}
               disabled={!selectedContract || isVerifying}
             >
               {isVerifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -293,7 +301,7 @@ export function VerifiedContracts() {
           <DialogHeader>
             <DialogTitle>Enter Etherscan API Key</DialogTitle>
             <DialogDescription>
-              To verify contracts on Etherscan, you need to provide your API key. 
+              To verify contracts on Etherscan, you need to provide your API key.
               You can get one from https://etherscan.io/apis
             </DialogDescription>
           </DialogHeader>
