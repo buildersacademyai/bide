@@ -73,6 +73,10 @@ export class EtherscanService {
       // Try without optimization
       { optimizationUsed: 0, runs: 0, evmversion: 'london' },
       { optimizationUsed: 0, runs: 0, evmversion: 'paris' },
+      // Additional optimization combinations
+      { optimizationUsed: 1, runs: 500, evmversion: 'london' },
+      { optimizationUsed: 1, runs: 100000, evmversion: 'london' },
+      { optimizationUsed: 1, runs: 10000, evmversion: 'london' },
     ];
 
     let lastError: Error | null = null;
@@ -112,8 +116,9 @@ export class EtherscanService {
           lastError = new Error(response.data.result);
           console.log('Verification attempt failed:', response.data.result);
 
-          // Add delay between attempts
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Add delay between attempts with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, attempts.indexOf(attempt)), 10000);
+          await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
 
@@ -128,8 +133,9 @@ export class EtherscanService {
             throw new Error('Invalid or unauthorized API key');
           }
           if (error.response?.status === 429) {
-            // Rate limit hit - wait longer before retry
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            // Rate limit hit - exponential backoff
+            const delay = Math.min(5000 * Math.pow(2, attempts.indexOf(attempt)), 30000);
+            await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
         }
