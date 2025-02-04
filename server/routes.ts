@@ -30,6 +30,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ message: "Source code is required" });
       }
 
+      // Compile contract
       const input = {
         language: 'Solidity',
         sources: {
@@ -49,7 +50,7 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Get the contract name from source code
+      // Get contract name from source
       const contractNameMatch = sourceCode.match(/contract\s+(\w+)\s*{/);
       const contractName = contractNameMatch ? contractNameMatch[1] : 'Contract';
 
@@ -57,29 +58,17 @@ export function registerRoutes(app: Express): Server {
       const contract = output.contracts['Contract.sol'][contractName];
 
       if (contractId) {
-        // Verify ownership before updating
-        const existingContract = await db.query.contracts.findFirst({
-          where: and(
-            eq(contracts.id, contractId),
-            eq(contracts.ownerAddress, ownerAddress)
-          ),
-        });
-
-        if (!existingContract) {
-          return res.status(404).json({ message: "Contract not found or unauthorized" });
-        }
-
-        // Update existing contract with new compilation results
+        // Update existing contract
         const [updatedContract] = await db.update(contracts)
           .set({
-            sourceCode,
+            source_code: sourceCode,
             abi: contract.abi,
             bytecode: contract.evm.bytecode.object,
-            updatedAt: new Date()
+            updated_at: new Date()
           })
           .where(and(
             eq(contracts.id, contractId),
-            eq(contracts.ownerAddress, ownerAddress)
+            eq(contracts.owner_address, ownerAddress)
           ))
           .returning();
 
@@ -89,17 +78,16 @@ export function registerRoutes(app: Express): Server {
           contract: updatedContract
         });
       } else {
-        // Create new contract file entry
+        // Create new contract
         const [savedContract] = await db.insert(contracts)
           .values({
             name: `${contractName}.sol`,
-            type: 'file',
-            sourceCode,
+            source_code: sourceCode,
             abi: contract.abi,
             bytecode: contract.evm.bytecode.object,
-            ownerAddress, // Add owner's address
-            createdAt: new Date(),
-            updatedAt: new Date()
+            owner_address: ownerAddress,
+            created_at: new Date(),
+            updated_at: new Date()
           })
           .returning();
 
@@ -121,47 +109,14 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/contracts", async (req, res) => {
     try {
       const ownerAddress = req.ownerAddress;
-      const newContract = {
-        name: req.body.name,
-        type: req.body.type || 'file',
-        path: req.body.path || '',
-        parentId: req.body.parentId || null,
-        sourceCode: req.body.sourceCode || null,
-        abi: req.body.abi || null,
-        bytecode: req.body.bytecode || null,
-        ownerAddress, // Add owner's address
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      // Check if we need to create root folder first
-      if (newContract.parentId) {
-        const parentFolder = await db.query.contracts.findFirst({
-          where: and(
-            eq(contracts.id, newContract.parentId),
-            eq(contracts.ownerAddress, ownerAddress)
-          ),
-        });
-
-        if (!parentFolder) {
-          // Create root folder first
-          const [rootFolder] = await db.insert(contracts).values({
-            name: 'Contracts',
-            type: 'folder',
-            path: '',
-            parentId: null,
-            ownerAddress,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }).returning();
-
-          // Update the parent id to the newly created folder
-          newContract.parentId = rootFolder.id;
-        }
-      }
-
       const [contract] = await db.insert(contracts)
-        .values(newContract)
+        .values({
+          name: req.body.name,
+          source_code: req.body.sourceCode || '',
+          owner_address: ownerAddress,
+          created_at: new Date(),
+          updated_at: new Date()
+        })
         .returning();
 
       res.json(contract);
@@ -180,7 +135,7 @@ export function registerRoutes(app: Express): Server {
       const name = req.query.name as string;
       const ownerAddress = req.ownerAddress;
 
-      let whereClause = and(eq(contracts.ownerAddress, ownerAddress));
+      let whereClause = eq(contracts.owner_address, ownerAddress);
       if (type) {
         whereClause = and(whereClause, eq(contracts.type, type));
       }
@@ -191,7 +146,7 @@ export function registerRoutes(app: Express): Server {
       const allContracts = await db.select()
         .from(contracts)
         .where(whereClause)
-        .orderBy(desc(contracts.createdAt));
+        .orderBy(desc(contracts.created_at));
 
       res.json(allContracts);
     } catch (err) {
@@ -206,7 +161,7 @@ export function registerRoutes(app: Express): Server {
       const contract = await db.query.contracts.findFirst({
         where: and(
           eq(contracts.id, parseInt(req.params.id)),
-          eq(contracts.ownerAddress, ownerAddress)
+          eq(contracts.owner_address, ownerAddress)
         ),
       });
 
@@ -216,7 +171,7 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Check if source code exists
-      if (!contract.sourceCode) {
+      if (!contract.source_code) {
         console.error(`Contract found but no source code for ID: ${req.params.id}`);
         return res.status(404).json({ message: "Contract source code not found" });
       }
@@ -226,7 +181,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json({
         ...contract,
-        source: contract.sourceCode
+        source: contract.source_code
       });
     } catch (err) {
       console.error('Error fetching contract:', err);
@@ -244,11 +199,11 @@ export function registerRoutes(app: Express): Server {
         .update(contracts)
         .set({
           ...req.body,
-          updatedAt: new Date(),
+          updated_at: new Date(),
         })
         .where(and(
           eq(contracts.id, parseInt(req.params.id)),
-          eq(contracts.ownerAddress, ownerAddress)
+          eq(contracts.owner_address, ownerAddress)
         ))
         .returning();
 
@@ -268,7 +223,7 @@ export function registerRoutes(app: Express): Server {
       const [contractToDelete] = await db.query.contracts.findMany({
         where: and(
           eq(contracts.id, parseInt(req.params.id)),
-          eq(contracts.ownerAddress, ownerAddress)
+          eq(contracts.owner_address, ownerAddress)
         ),
       });
 
@@ -278,16 +233,13 @@ export function registerRoutes(app: Express): Server {
 
       // Delete all child contracts recursively
       const children = await db.query.contracts.findMany({
-        where: and(
-          eq(contracts.parentId, parseInt(req.params.id)),
-          eq(contracts.ownerAddress, ownerAddress)
-        ),
+        where: eq(contracts.parentId, parseInt(req.params.id)),
       });
 
       for (const child of children) {
         await db.delete(contracts).where(and(
           eq(contracts.id, child.id),
-          eq(contracts.ownerAddress, ownerAddress)
+          eq(contracts.owner_address, ownerAddress)
         ));
       }
 
@@ -295,7 +247,7 @@ export function registerRoutes(app: Express): Server {
       const [deletedContract] = await db.delete(contracts)
         .where(and(
           eq(contracts.id, parseInt(req.params.id)),
-          eq(contracts.ownerAddress, ownerAddress)
+          eq(contracts.owner_address, ownerAddress)
         ))
         .returning();
 

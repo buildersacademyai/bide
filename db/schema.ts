@@ -8,14 +8,14 @@ export const contracts = pgTable("contracts", {
   type: text("type").default('file'),
   path: text("path").default(''),
   parentId: integer("parent_id").references(() => contracts.id),
-  sourceCode: text("source_code"),
+  source_code: text("source_code"),
   abi: jsonb("abi"),
   bytecode: text("bytecode"),
   address: text("address"),
   network: text("network"),
-  ownerAddress: text("owner_address"), 
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  owner_address: text("owner_address"), 
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
 });
 
 // Self-referential relation for folder hierarchy
