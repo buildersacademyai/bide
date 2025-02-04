@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 export class Web3AuthService {
   private static provider: ethers.BrowserProvider | null = null;
   private static address: string | null = null;
+  private static chainId: string | null = null;
 
   static async connect(): Promise<string> {
     try {
@@ -19,10 +20,15 @@ export class Web3AuthService {
       const signer = await this.provider.getSigner();
       this.address = await signer.getAddress();
 
-      // Store address in localStorage
-      localStorage.setItem('wallet_address', this.address);
+      // Get current chain ID
+      const network = await this.provider.getNetwork();
+      this.chainId = network.chainId.toString();
 
-      // Listen for account changes
+      // Store address and chain ID in localStorage
+      localStorage.setItem('wallet_address', this.address);
+      localStorage.setItem('chain_id', this.chainId);
+
+      // Listen for account and network changes
       window.ethereum.on('accountsChanged', this.handleAccountsChanged);
       window.ethereum.on('chainChanged', this.handleChainChanged);
 
@@ -40,14 +46,13 @@ export class Web3AuthService {
     }
     this.provider = null;
     this.address = null;
+    this.chainId = null;
     localStorage.removeItem('wallet_address');
+    localStorage.removeItem('chain_id');
   }
 
   static async getCurrentAddress(): Promise<string | null> {
-    if (!this.provider || !this.address) {
-      return localStorage.getItem('wallet_address');
-    }
-    return this.address;
+    return localStorage.getItem('wallet_address');
   }
 
   static async signMessage(message: string): Promise<string> {
@@ -58,24 +63,43 @@ export class Web3AuthService {
     return await signer.signMessage(message);
   }
 
-  private static handleAccountsChanged = (accounts: string[]) => {
-    if (accounts.length === 0) {
-      // MetaMask is locked or the user has not connected any accounts
-      this.provider = null;
-      this.address = null;
-      localStorage.removeItem('wallet_address');
-      window.location.reload();
-    } else if (accounts[0] !== this.address) {
-      // User switched accounts
-      this.address = accounts[0];
-      localStorage.setItem('wallet_address', accounts[0]);
-      window.location.reload();
+  private static handleAccountsChanged = async (accounts: string[]) => {
+    try {
+      if (accounts.length === 0) {
+        // MetaMask is locked or the user has not connected any accounts
+        await this.disconnect();
+      } else if (accounts[0] !== this.address) {
+        // User switched accounts
+        this.address = accounts[0];
+        localStorage.setItem('wallet_address', accounts[0]);
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error handling account change:', error);
     }
   };
 
-  private static handleChainChanged = () => {
-    // Reload the page when the chain changes
-    window.location.reload();
+  private static handleChainChanged = async (chainId: string) => {
+    try {
+      // Update stored chain ID
+      this.chainId = chainId;
+      localStorage.setItem('chain_id', chainId);
+
+      // Get new provider for the new network
+      if (window.ethereum) {
+        this.provider = new ethers.BrowserProvider(window.ethereum);
+        // Verify the address is still valid on the new network
+        const signer = await this.provider.getSigner();
+        const address = await signer.getAddress();
+        if (address !== this.address) {
+          this.address = address;
+          localStorage.setItem('wallet_address', address);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling network change:', error);
+      await this.disconnect();
+    }
   };
 }
 
