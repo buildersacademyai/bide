@@ -159,12 +159,12 @@ export async function deployContract(abi: any[], bytecode: string) {
 
     console.log('Deployment transaction hash:', deploymentTx.hash);
 
-    // Wait for deployment
+    // Wait for deployment confirmation with 2 blocks
     console.log('Waiting for deployment transaction confirmation...');
-    const receipt = await deploymentTx.wait();
+    const receipt = await deploymentTx.wait(2);
 
-    if (!receipt) {
-      throw new Error('Failed to get deployment receipt');
+    if (!receipt || receipt.status !== 1) {
+      throw new Error('Transaction failed or was reverted');
     }
 
     // Get deployed contract address
