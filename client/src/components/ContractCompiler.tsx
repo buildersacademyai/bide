@@ -190,18 +190,24 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
           }
         </Button>
 
-        {compiledContract && (
+        {compiledContract && !deploying && (
           <Button
             onClick={handleDeploy}
-            disabled={deploying || !connectedWallet}
+            disabled={!connectedWallet}
             className="flex-1"
           >
-            {deploying ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Rocket className="mr-2 h-4 w-4" />
-            )}
-            {deploying ? 'Deploying...' : 'Deploy Contract'}
+            <Rocket className="mr-2 h-4 w-4" />
+            Deploy Contract
+          </Button>
+        )}
+
+        {deploying && (
+          <Button
+            disabled
+            className="flex-1"
+          >
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Deploying...
           </Button>
         )}
       </div>
