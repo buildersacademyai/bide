@@ -7,15 +7,20 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import About from "@/pages/about";
 import Editor from "@/pages/editor";
-import { AuthProvider, useAuth } from "@/lib/web3/auth-context";
-import { Loader2 } from "lucide-react";
+import { Web3AuthService } from "@/lib/web3/auth-service";
+import { Loader2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 
 // Protected route component
 function ProtectedRoute({ component: Component }: { component: () => JSX.Element }) {
-  const { address, isConnecting } = useAuth();
+  const { data: address, isLoading } = useQuery({ 
+    queryKey: ['wallet'],
+    queryFn: Web3AuthService.getCurrentAddress,
+    refetchOnWindowFocus: true
+  });
 
-  if (isConnecting) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -27,11 +32,16 @@ function ProtectedRoute({ component: Component }: { component: () => JSX.Element
   if (!address) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
-        <h2 className="text-2xl font-bold">Connect Your Wallet</h2>
-        <p className="text-muted-foreground text-center max-w-md">
-          Connect your wallet to access the IDE and manage your smart contracts.
-          Your contracts and transactions will be associated with your wallet address.
-        </p>
+        <div className="text-center space-y-2">
+          <Wallet className="h-12 w-12 mx-auto text-primary" />
+          <h2 className="text-2xl font-bold">Connect Your Wallet</h2>
+          <p className="text-muted-foreground text-center max-w-md mx-auto">
+            To access the Blockchain IDE, please connect your wallet. Your smart contracts and transactions will be associated with your wallet address.
+          </p>
+        </div>
+        <Button onClick={() => Web3AuthService.connect()} size="lg">
+          Connect MetaMask
+        </Button>
       </div>
     );
   }
@@ -41,13 +51,10 @@ function ProtectedRoute({ component: Component }: { component: () => JSX.Element
 }
 
 function Router() {
-  const { address } = useAuth();
-
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/about" component={About} />
-      {/* Automatically redirect to app if wallet is connected */}
       <Route path="/app">
         {() => <ProtectedRoute component={Editor} />}
       </Route>
@@ -59,15 +66,13 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <div className="min-h-screen flex flex-col">
-          <Navigation />
-          <main className="flex-1">
-            <Router />
-          </main>
-        </div>
-        <Toaster />
-      </AuthProvider>
+      <div className="min-h-screen flex flex-col">
+        <Navigation />
+        <main className="flex-1">
+          <Router />
+        </main>
+      </div>
+      <Toaster />
     </QueryClientProvider>
   );
 }

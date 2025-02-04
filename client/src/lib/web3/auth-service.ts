@@ -28,12 +28,15 @@ export class Web3AuthService {
       }
 
       // Request account access
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No accounts found');
+      }
 
       // Create Web3 provider
       this.provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await this.provider.getSigner();
-      this.address = await signer.getAddress();
+      this.address = accounts[0];
 
       // Get current chain ID
       const network = await this.provider.getNetwork();
@@ -75,7 +78,24 @@ export class Web3AuthService {
   }
 
   static async getCurrentAddress(): Promise<string | null> {
-    return localStorage.getItem('wallet_address');
+    const address = localStorage.getItem('wallet_address');
+    if (!address) return null;
+
+    // Verify the address is still accessible in MetaMask
+    try {
+      if (window.ethereum) {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts && accounts[0]?.toLowerCase() === address.toLowerCase()) {
+          return address;
+        }
+      }
+      // If we can't verify the address, clear it
+      localStorage.removeItem('wallet_address');
+      return null;
+    } catch (error) {
+      console.error('Error verifying wallet connection:', error);
+      return null;
+    }
   }
 
   static async getCurrentChainId(): Promise<string | null> {
@@ -94,13 +114,15 @@ export class Web3AuthService {
     try {
       if (accounts.length === 0) {
         // MetaMask is locked or the user has not connected any accounts
-        await this.disconnect();
+        localStorage.removeItem('wallet_address');
+        localStorage.removeItem('chain_id');
+        this.address = null;
+        this.chainId = null;
+        window.dispatchEvent(new CustomEvent('walletDisconnected'));
       } else if (accounts[0] !== this.address) {
         // User switched accounts
         this.address = accounts[0];
         localStorage.setItem('wallet_address', accounts[0]);
-
-        // Dispatch an event that components can listen to
         window.dispatchEvent(new CustomEvent('accountChanged', {
           detail: { address: accounts[0] }
         }));
@@ -110,30 +132,22 @@ export class Web3AuthService {
     }
   };
 
-  private static handleChainChanged = async (newChainId: string) => {
+  private static handleChainChanged = async (chainId: string) => {
     try {
-      const hexChainId = newChainId.toLowerCase();
-      if (this.chainId?.toLowerCase() !== hexChainId) {
-        // Update stored chain ID
+      const hexChainId = chainId.toLowerCase();
+      if (this.chainId !== hexChainId) {
         this.chainId = hexChainId;
         localStorage.setItem('chain_id', hexChainId);
 
-        // Only update provider if we're still connected
         if (window.ethereum && this.address) {
           this.provider = new ethers.BrowserProvider(window.ethereum);
-
-          // Dispatch a custom event that components can listen to
           window.dispatchEvent(new CustomEvent('networkChanged', {
             detail: { chainId: hexChainId }
           }));
         }
       }
-    } catch (error: unknown) {
-      console.error('Error handling network change:', error);
-      // Only disconnect if there's an actual error, not just a network change
-      if (error instanceof Error && !error.message.includes('underlying network changed')) {
-        await this.disconnect();
-      }
+    } catch (error) {
+      console.error('Error handling chain change:', error);
     }
   };
 }
