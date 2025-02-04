@@ -70,29 +70,27 @@ export function FileExplorer({ onFileSelect }: Props) {
       try {
         const account = await getConnectedAccount();
         if (!account) {
-          toast({
-            variant: "destructive",
-            title: "Authentication required",
-            description: "Please connect your wallet to view your contracts",
-          });
-          return [];
+          return []; // Return empty array if no wallet is connected
         }
 
         const response = await fetch('/api/contracts');
         if (!response.ok) {
           throw new Error('Failed to fetch contracts');
         }
+
         const data = await response.json();
-        // Filter contracts by owner address
         return data.filter((contract: Contract) => 
           contract.type === 'folder' || contract.ownerAddress === account
         );
       } catch (error) {
         console.error('Error fetching contracts:', error);
-        throw error;
+        // Return empty array instead of throwing to prevent query retries
+        return [];
       }
     },
-    enabled: !!connectedAddress, // Only fetch when wallet is connected
+    enabled: !!connectedAddress,
+    staleTime: 1000 * 60, // Cache for 1 minute
+    retry: false, // Don't retry failed requests
   });
 
   const createMutation = useMutation({
