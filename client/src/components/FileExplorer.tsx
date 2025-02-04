@@ -241,23 +241,23 @@ export function FileExplorer({ onFileSelect }: Props) {
     const contractName = fileName.replace('.sol', '');
 
     const sourceCode = `// SPDX-License-Identifier: MIT
-  pragma solidity ^0.8.0;
+pragma solidity ^0.8.0;
 
-  contract ${contractName} {
-      string public message;
+contract ${contractName} {
+    string public message;
 
-      constructor() {
-          message = "Hello, Blockchain!";
-      }
+    constructor() {
+        message = "Hello, Blockchain!";
+    }
 
-      function setMessage(string memory newMessage) public {
-          message = newMessage;
-      }
+    function setMessage(string memory newMessage) public {
+        message = newMessage;
+    }
 
-      function getMessage() public view returns (string memory) {
-          return message;
-      }
-  }`;
+    function getMessage() public view returns (string memory) {
+        return message;
+    }
+}`;
 
     try {
       // First check if root folder exists
