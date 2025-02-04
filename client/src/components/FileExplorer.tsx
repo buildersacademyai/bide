@@ -236,14 +236,16 @@ export function FileExplorer({ onFileSelect }: Props) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      if (!connectedAddress) {
-        throw new Error('Please connect your wallet to delete files');
+      const account = await getConnectedAccount();
+      if (!account) {
+        throw new Error('Please connect your wallet first');
       }
 
       const res = await fetch(`/api/contracts/${id}`, {
         method: 'DELETE',
         headers: {
-          'x-wallet-address': connectedAddress
+          'Content-Type': 'application/json',
+          'x-wallet-address': account
         }
       });
 
@@ -257,18 +259,18 @@ export function FileExplorer({ onFileSelect }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
       toast({
-        title: "Item deleted",
-        description: "Successfully deleted the item",
+        title: "Success",
+        description: "Contract deleted successfully",
       });
-      setItemToDelete(null); // Close the delete dialog
+      setItemToDelete(null);
     },
     onError: (error: Error) => {
       toast({
         variant: "destructive",
-        title: "Failed to delete item",
+        title: "Failed to delete",
         description: error.message,
       });
-      setItemToDelete(null); // Close the delete dialog on error
+      setItemToDelete(null);
     },
   });
 
