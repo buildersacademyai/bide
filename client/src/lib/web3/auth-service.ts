@@ -16,6 +16,7 @@ export class Web3AuthService {
   private static address: string | null = null;
   private static chainId: string | null = null;
   private static isConnecting: boolean = false;
+  private static networkChangeTimeout: NodeJS.Timeout | null = null;
 
   static async connect(): Promise<string> {
     try {
@@ -43,8 +44,12 @@ export class Web3AuthService {
       this.chainId = network.chainId.toString();
 
       // Store address and chain ID in localStorage
-      localStorage.setItem('wallet_address', this.address);
-      localStorage.setItem('chain_id', this.chainId);
+      if (this.address) {
+        localStorage.setItem('wallet_address', this.address);
+      }
+      if (this.chainId) {
+        localStorage.setItem('chain_id', this.chainId);
+      }
 
       // Remove previous listeners before adding new ones
       if (window.ethereum) {
@@ -75,23 +80,22 @@ export class Web3AuthService {
     this.chainId = null;
     localStorage.removeItem('wallet_address');
     localStorage.removeItem('chain_id');
+    localStorage.removeItem('token');
   }
 
   static async getCurrentAddress(): Promise<string | null> {
-    const address = localStorage.getItem('wallet_address');
-    if (!address) return null;
-
-    // Verify the address is still accessible in MetaMask
     try {
-      if (window.ethereum) {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts && accounts[0]?.toLowerCase() === address.toLowerCase()) {
-          return address;
-        }
+      const address = localStorage.getItem('wallet_address');
+      if (!address || !window.ethereum) return null;
+
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      if (!accounts || accounts.length === 0 || accounts[0]?.toLowerCase() !== address.toLowerCase()) {
+        localStorage.removeItem('wallet_address');
+        localStorage.removeItem('token');
+        return null;
       }
-      // If we can't verify the address, clear it
-      localStorage.removeItem('wallet_address');
-      return null;
+
+      return address;
     } catch (error) {
       console.error('Error verifying wallet connection:', error);
       return null;
@@ -102,20 +106,13 @@ export class Web3AuthService {
     return localStorage.getItem('chain_id');
   }
 
-  static async signMessage(message: string): Promise<string> {
-    if (!this.provider) {
-      throw new Error('Not connected to MetaMask');
-    }
-    const signer = await this.provider.getSigner();
-    return await signer.signMessage(message);
-  }
-
   private static handleAccountsChanged = async (accounts: string[]) => {
     try {
       if (accounts.length === 0) {
         // MetaMask is locked or the user has not connected any accounts
         localStorage.removeItem('wallet_address');
         localStorage.removeItem('chain_id');
+        localStorage.removeItem('token');
         this.address = null;
         this.chainId = null;
         window.dispatchEvent(new CustomEvent('walletDisconnected'));
@@ -134,18 +131,30 @@ export class Web3AuthService {
 
   private static handleChainChanged = async (chainId: string) => {
     try {
-      const hexChainId = chainId.toLowerCase();
-      if (this.chainId !== hexChainId) {
-        this.chainId = hexChainId;
-        localStorage.setItem('chain_id', hexChainId);
-
-        if (window.ethereum && this.address) {
-          this.provider = new ethers.BrowserProvider(window.ethereum);
-          window.dispatchEvent(new CustomEvent('networkChanged', {
-            detail: { chainId: hexChainId }
-          }));
-        }
+      // Clear previous timeout if it exists
+      if (this.networkChangeTimeout) {
+        clearTimeout(this.networkChangeTimeout);
       }
+
+      // Debounce network change events
+      this.networkChangeTimeout = setTimeout(async () => {
+        const hexChainId = chainId.toLowerCase();
+        if (this.chainId !== hexChainId) {
+          this.chainId = hexChainId;
+          localStorage.setItem('chain_id', hexChainId);
+
+          if (window.ethereum && this.address) {
+            this.provider = new ethers.BrowserProvider(window.ethereum);
+
+            // Dispatch network change event after a small delay
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('networkChanged', {
+                detail: { chainId: hexChainId }
+              }));
+            }, 500);
+          }
+        }
+      }, 1000); // Debounce for 1 second
     } catch (error) {
       console.error('Error handling chain change:', error);
     }
