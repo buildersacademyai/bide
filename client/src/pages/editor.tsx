@@ -111,17 +111,21 @@ export default function Editor() {
       // Update contract in database with deployment info
       const response = await fetch(`/api/contracts/${currentContractId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-wallet-address': account // Add wallet address header
+        },
         body: JSON.stringify({
           address,
-          network: 'sepolia',
+          network: 'sepolia', // or get this from the current network
           abi: compiledContract.abi,
           bytecode: compiledContract.bytecode,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update contract deployment info');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update contract deployment info');
       }
 
       // Refresh contracts list

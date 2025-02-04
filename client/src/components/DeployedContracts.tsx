@@ -32,7 +32,15 @@ export function DeployedContracts() {
     queryKey: ['/api/contracts'],
     queryFn: async () => {
       try {
-        const response = await fetch('/api/contracts');
+        if (!connectedAddress) {
+          return [];
+        }
+
+        const response = await fetch('/api/contracts', {
+          headers: {
+            'x-wallet-address': connectedAddress
+          }
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch contracts');
         }
@@ -51,7 +59,7 @@ export function DeployedContracts() {
         return [];
       }
     },
-    enabled: true,
+    enabled: !!connectedAddress,
     staleTime: 1000 * 30, // Cache for 30 seconds
   });
 
