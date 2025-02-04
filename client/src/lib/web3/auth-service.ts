@@ -1,5 +1,16 @@
 import { ethers } from 'ethers';
 
+declare global {
+  interface Window {
+    ethereum: {
+      isMetaMask?: boolean;
+      request: (args: { method: string; params?: any[] }) => Promise<any>;
+      on: (event: string, handler: (...args: any[]) => void) => void;
+      removeListener: (event: string, handler: (...args: any[]) => void) => void;
+    } | undefined;
+  }
+}
+
 export class Web3AuthService {
   private static provider: ethers.BrowserProvider | null = null;
   private static address: string | null = null;
@@ -88,28 +99,13 @@ export class Web3AuthService {
       // Get new provider for the new network
       if (window.ethereum) {
         this.provider = new ethers.BrowserProvider(window.ethereum);
-        // Verify the address is still valid on the new network
-        const signer = await this.provider.getSigner();
-        const address = await signer.getAddress();
-        if (address !== this.address) {
-          this.address = address;
-          localStorage.setItem('wallet_address', address);
-        }
+
+        // Refresh the page to update all network-dependent components
+        window.location.reload();
       }
     } catch (error) {
       console.error('Error handling network change:', error);
       await this.disconnect();
     }
   };
-}
-
-// Add type declarations for window.ethereum
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>;
-      on: (event: string, handler: (...args: any[]) => void) => void;
-      removeListener: (event: string, handler: (...args: any[]) => void) => void;
-    };
-  }
 }
