@@ -55,40 +55,77 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
 
-  // Handle wallet connection and changes
+  // Update the wallet connection effect in the FileExplorer component
   useEffect(() => {
+    let isSubscribed = true;
+
     const checkWallet = async () => {
-      const account = await getConnectedAccount();
-      setConnectedAddress(account);
-      if (account) {
-        // Invalidate queries when wallet changes
-        queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      try {
+        const account = await getConnectedAccount();
+        if (isSubscribed) {
+          setConnectedAddress(account);
+          if (account) {
+            // Invalidate queries when wallet changes
+            queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+          }
+        }
+      } catch (error) {
+        console.error('Error checking wallet:', error);
+        if (isSubscribed) {
+          toast({
+            variant: "destructive",
+            title: "Wallet Connection Error",
+            description: error instanceof Error ? error.message : "Failed to connect to wallet",
+          });
+        }
       }
     };
 
     // Initial check
     checkWallet();
 
-    // Listen for account changes
+    // Setup event listeners for wallet changes
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', async (accounts: string[]) => {
+      const handleAccountsChanged = async (accounts: string[]) => {
         const newAccount = accounts[0] || null;
-        setConnectedAddress(newAccount);
-        if (newAccount) {
-          await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
-          toast({
-            title: "Wallet changed",
-            description: `Connected to ${newAccount.slice(0, 6)}...${newAccount.slice(-4)}`,
-          });
+        if (isSubscribed) {
+          setConnectedAddress(newAccount);
+          if (newAccount) {
+            await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+            toast({
+              title: "Wallet Changed",
+              description: `Connected to ${newAccount.slice(0, 6)}...${newAccount.slice(-4)}`,
+            });
+          } else {
+            toast({
+              variant: "destructive",
+              title: "Wallet Disconnected",
+              description: "Please connect your wallet to continue",
+            });
+          }
         }
-      });
+      };
+
+      const handleChainChanged = () => {
+        // Reload the page on network change as recommended by MetaMask
+        window.location.reload();
+      };
+
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+
+      // Cleanup function
+      return () => {
+        isSubscribed = false;
+        if (window.ethereum?.removeListener) {
+          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+          window.ethereum.removeListener('chainChanged', handleChainChanged);
+        }
+      };
     }
 
-    // Cleanup
     return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', () => {});
-      }
+      isSubscribed = false;
     };
   }, [queryClient, toast]);
 

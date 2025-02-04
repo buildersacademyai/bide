@@ -8,6 +8,18 @@ declare global {
 
 let provider: ethers.BrowserProvider | null = null;
 
+// Network configurations
+const SUPPORTED_NETWORKS = {
+  sepolia: {
+    chainId: '0xaa36a7', // 11155111 in hex
+    name: 'Sepolia'
+  },
+  goerli: {
+    chainId: '0x5',
+    name: 'Goerli'
+  }
+};
+
 export async function connectWallet() {
   if (!window.ethereum) {
     throw new Error("MetaMask not found! Please install MetaMask extension.");
@@ -17,14 +29,26 @@ export async function connectWallet() {
     provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send("eth_requestAccounts", []);
 
+    // Get current network
+    const network = await provider.getNetwork();
+    console.log('Connected to network:', network.name);
+
     // Setup network change handler
-    window.ethereum.on('chainChanged', () => {
+    window.ethereum.on('chainChanged', (chainId: string) => {
+      console.log('Network changed to:', chainId);
       // Reload the page on network change as recommended by MetaMask
+      window.location.reload();
+    });
+
+    // Setup account change handler
+    window.ethereum.on('accountsChanged', (accounts: string[]) => {
+      console.log('Account changed:', accounts[0]);
       window.location.reload();
     });
 
     return accounts[0];
   } catch (error: any) {
+    console.error('Wallet connection error:', error);
     if (error.code === 4001) {
       throw new Error("Please connect your MetaMask wallet");
     }
@@ -40,6 +64,16 @@ export async function getConnectedAccount() {
   try {
     provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send("eth_accounts", []);
+
+    if (accounts[0]) {
+      // Verify we're on a supported network
+      const network = await provider.getNetwork();
+      console.log('Current network:', network.name);
+
+      const chainId = await provider.send("eth_chainId", []);
+      console.log('Chain ID:', chainId);
+    }
+
     return accounts[0] || null;
   } catch (error) {
     console.error('Error getting connected account:', error);
@@ -110,6 +144,7 @@ export async function getContract(address: string, abi: any[]) {
     const signer = await provider.getSigner();
     return new ethers.Contract(address, abi, signer);
   } catch (error: any) {
+    console.error('Error getting contract:', error);
     throw new Error(`Failed to get contract instance: ${error.message}`);
   }
 }
