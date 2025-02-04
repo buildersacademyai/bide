@@ -49,20 +49,6 @@ export class EtherscanService {
     return 'v0.8.17+commit.8df45f5f';
   }
 
-  private static getEvmVersion(compilerVersion: string): string {
-    // Extract the version number from the compiler version string
-    const version = compilerVersion.match(/v(\d+\.\d+\.\d+)/)?.[1];
-    if (!version) return 'paris';
-
-    // Map Solidity versions to appropriate EVM versions
-    if (version >= '0.8.18') return 'paris';
-    if (version >= '0.8.16') return 'london';
-    if (version >= '0.8.13') return 'berlin';
-    if (version >= '0.8.10') return 'istanbul';
-    if (version >= '0.8.7') return 'berlin';
-    return 'london'; // Default to london for older versions
-  }
-
   static async verifyContract(
     address: string,
     sourceCode: string,
@@ -96,37 +82,45 @@ export class EtherscanService {
       // Get supported compiler version
       const compilerVersion = this.getSupportedCompilerVersion(versionMatch[1].trim());
 
-      // Get appropriate EVM version
-      const evmVersion = this.getEvmVersion(compilerVersion);
-
-      console.log('Verification settings:', {
+      console.log('Starting contract verification with settings:', {
+        address,
+        contractName: actualContractName,
         compilerVersion,
-        evmVersion,
-        contractName: actualContractName
+        network,
+      });
+
+      // First try with optimization enabled
+      const verificationParams = {
+        module: 'contract',
+        action: 'verifysourcecode',
+        apikey: apiKey,
+        contractaddress: address,
+        sourceCode,
+        contractname: actualContractName,
+        codeformat: 'solidity-single-file',
+        compilerversion: compilerVersion,
+        optimizationUsed: 1,
+        runs: 200,
+        evmversion: '', // Let Etherscan determine the appropriate EVM version
+        licenseType: 1 // MIT License
+      };
+
+      console.log('Sending verification request with params:', {
+        ...verificationParams,
+        apikey: '[REDACTED]',
+        sourceCode: '[REDACTED]'
       });
 
       const response = await axios.post(
         `https://api-${network}.etherscan.io/api`,
         null,
-        {
-          params: {
-            module: 'contract',
-            action: 'verifysourcecode',
-            apikey: apiKey,
-            contractaddress: address,
-            sourceCode,
-            contractname: actualContractName,
-            codeformat: 'solidity-single-file',
-            compilerversion: compilerVersion,
-            optimizationUsed: 1, // Enable optimization to match deployment
-            runs: 200,
-            evmversion: evmVersion,
-            licenseType: 1 // MIT License
-          },
-        }
+        { params: verificationParams }
       );
 
+      console.log('Verification API response:', response.data);
+
       if (response.data.status === '0') {
+        console.error('Verification error:', response.data.result);
         throw new Error(response.data.result);
       }
 
@@ -135,6 +129,8 @@ export class EtherscanService {
       if (error instanceof Error && error.message === 'NO_API_KEY') {
         throw error;
       }
+
+      console.error('Contract verification error:', error);
 
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 403 || error.response?.status === 401) {
@@ -170,6 +166,8 @@ export class EtherscanService {
           },
         }
       );
+
+      console.log('Verification status response:', response.data);
 
       if (response.data.status === '1') {
         return { status: 'success' };
