@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { AlertCircle, Loader2, Terminal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { getConnectedAccount } from '@/lib/web3';
 
 interface Props {
   sourceCode: string;
@@ -38,6 +39,12 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
     setError(null);
 
     try {
+      // Get the connected wallet address
+      const walletAddress = await getConnectedAccount();
+      if (!walletAddress) {
+        throw new Error('Please connect your wallet to compile contracts');
+      }
+
       toast({
         title: "Compiling contract",
         description: "Please wait while the contract is being compiled...",
@@ -45,7 +52,10 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
 
       const response = await fetch('/api/compile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-wallet-address': walletAddress
+        },
         body: JSON.stringify({ 
           sourceCode,
           contractId 
