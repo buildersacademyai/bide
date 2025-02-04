@@ -7,54 +7,16 @@ import { connectWallet, getConnectedAccount, deployContract } from '@/lib/web3';
 
 interface Props {
   sourceCode: string;
+  contractId: number | undefined;  // Added contractId prop
+  onCompileSuccess?: (abi: any[], bytecode: string) => void;
 }
 
-export function ContractCompiler({ sourceCode }: Props) {
+export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: Props) {
   const { toast } = useToast();
   const [compiling, setCompiling] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compiledContract, setCompiledContract] = useState<{ abi: any[], bytecode: string } | null>(null);
-  const [deployedAddress, setDeployedAddress] = useState<string | null>(null);
-
-  const handleDeploy = async () => {
-    if (!compiledContract) {
-      toast({
-        variant: "destructive",
-        title: "Compilation required",
-        description: "Please compile the contract before deploying",
-      });
-      return;
-    }
-
-    setDeploying(true);
-    setError(null);
-
-    try {
-      // Ensure wallet is connected
-      await connectWallet();
-
-      // Deploy contract
-      const address = await deployContract(compiledContract.abi, compiledContract.bytecode);
-      setDeployedAddress(address);
-
-      toast({
-        title: "Success",
-        description: `Contract deployed at ${address}`,
-      });
-    } catch (err) {
-      console.error('Deployment error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Deployment failed';
-      setError(errorMessage);
-      toast({
-        variant: "destructive",
-        title: "Deployment failed",
-        description: errorMessage,
-      });
-    } finally {
-      setDeploying(false);
-    }
-  };
 
   const handleCompile = async () => {
     try {
@@ -68,6 +30,10 @@ export function ContractCompiler({ sourceCode }: Props) {
         throw new Error('Source code cannot be empty');
       }
 
+      if (!contractId) {
+        throw new Error('No contract selected');
+      }
+
       setCompiling(true);
       setError(null);
 
@@ -77,7 +43,7 @@ export function ContractCompiler({ sourceCode }: Props) {
           'Content-Type': 'application/json',
           'x-wallet-address': account
         },
-        body: JSON.stringify({ sourceCode })
+        body: JSON.stringify({ sourceCode, contractId })
       });
 
       const data = await response.json();
@@ -87,6 +53,7 @@ export function ContractCompiler({ sourceCode }: Props) {
       }
 
       setCompiledContract({ abi: data.abi, bytecode: data.bytecode });
+      onCompileSuccess?.(data.abi, data.bytecode);
 
       toast({
         title: "Success",
@@ -111,7 +78,7 @@ export function ContractCompiler({ sourceCode }: Props) {
       <div className="flex gap-2">
         <Button 
           onClick={handleCompile} 
-          disabled={compiling}
+          disabled={compiling || !contractId}
           className="flex-1"
         >
           {compiling ? (
@@ -121,17 +88,6 @@ export function ContractCompiler({ sourceCode }: Props) {
           )}
           {compiling ? 'Compiling...' : 'Compile Contract'}
         </Button>
-
-        {compiledContract && !compiling && (
-          <Button onClick={handleDeploy} disabled={deploying} className="flex-1">
-            {deploying ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Rocket className="mr-2 h-4 w-4" />
-            )}
-            {deploying ? 'Deploying...' : 'Deploy Contract'}
-          </Button>
-        )}
       </div>
 
       {error && (
@@ -139,14 +95,6 @@ export function ContractCompiler({ sourceCode }: Props) {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             {error}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {deployedAddress && (
-        <Alert>
-          <AlertDescription>
-            Contract deployed at: {deployedAddress}
           </AlertDescription>
         </Alert>
       )}
