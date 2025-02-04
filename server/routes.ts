@@ -22,10 +22,28 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/compile", async (req, res) => {
     try {
       const { sourceCode, contractId } = req.body;
-      const walletAddress = req.walletAddress;
+      const walletAddress = req.headers['x-wallet-address'];
+
+      if (!walletAddress) {
+        return res.status(401).json({ message: "Wallet address not provided" });
+      }
 
       if (!sourceCode) {
         return res.status(400).json({ message: "Source code is required" });
+      }
+
+      // If contractId is provided, verify ownership
+      if (contractId) {
+        const existingContract = await db.query.contracts.findFirst({
+          where: and(
+            eq(contracts.id, contractId),
+            eq(contracts.ownerAddress, walletAddress.toString().toLowerCase())
+          ),
+        });
+
+        if (!existingContract) {
+          return res.status(403).json({ message: "Not authorized to modify this contract" });
+        }
       }
 
       const input = {
@@ -52,18 +70,6 @@ export function registerRoutes(app: Express): Server {
       const contract = output.contracts['Contract.sol'][contractName];
 
       if (contractId) {
-        // Verify ownership before updating
-        const existingContract = await db.query.contracts.findFirst({
-          where: and(
-            eq(contracts.id, contractId),
-            eq(contracts.ownerAddress, walletAddress)
-          ),
-        });
-
-        if (!existingContract) {
-          return res.status(403).json({ message: "Not authorized to modify this contract" });
-        }
-
         const [updatedContract] = await db.update(contracts)
           .set({
             sourceCode,
@@ -87,7 +93,7 @@ export function registerRoutes(app: Express): Server {
             sourceCode,
             abi: contract.abi,
             bytecode: contract.evm.bytecode.object,
-            ownerAddress: walletAddress,
+            ownerAddress: walletAddress.toString().toLowerCase(),
             createdAt: new Date(),
             updatedAt: new Date()
           })

@@ -19,8 +19,35 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
   const [error, setError] = useState<string | null>(null);
   const [lastCompiledCode, setLastCompiledCode] = useState<string>('');
   const queryClient = useQueryClient();
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
+
+  // Check wallet connection on mount and when account changes
+  useEffect(() => {
+    const checkWalletConnection = async () => {
+      const account = await getConnectedAccount();
+      setConnectedWallet(account);
+    };
+
+    checkWalletConnection();
+
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', checkWalletConnection);
+      return () => {
+        window.ethereum.removeListener('accountsChanged', checkWalletConnection);
+      };
+    }
+  }, []);
 
   const handleCompile = async () => {
+    if (!connectedWallet) {
+      toast({
+        variant: "destructive",
+        title: "Wallet not connected",
+        description: "Please connect your wallet to compile contracts",
+      });
+      return;
+    }
+
     // Skip if code hasn't changed since last compilation
     if (sourceCode === lastCompiledCode) {
       toast({
@@ -39,12 +66,6 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
     setError(null);
 
     try {
-      // Get the connected wallet address
-      const walletAddress = await getConnectedAccount();
-      if (!walletAddress) {
-        throw new Error('Please connect your wallet to compile contracts');
-      }
-
       toast({
         title: "Compiling contract",
         description: "Please wait while the contract is being compiled...",
@@ -54,7 +75,7 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-wallet-address': walletAddress
+          'x-wallet-address': connectedWallet
         },
         body: JSON.stringify({ 
           sourceCode,
@@ -88,27 +109,23 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
       onCompileSuccess(data.abi, data.bytecode);
     } catch (err) {
       console.error('Compilation error:', err);
-      setError(err instanceof Error ? err.message : 'Compilation failed');
+      const errorMessage = err instanceof Error ? err.message : 'Compilation failed';
+      setError(errorMessage);
       toast({
         variant: "destructive",
         title: "Compilation failed",
-        description: err instanceof Error ? err.message : "An error occurred during compilation",
+        description: errorMessage,
       });
     } finally {
       setCompiling(false);
     }
   };
 
-  // Reset lastCompiledCode if contractId changes (new contract loaded)
-  useEffect(() => {
-    setLastCompiledCode('');
-  }, [contractId]);
-
   return (
     <>
       <Button 
         onClick={handleCompile} 
-        disabled={compiling || !sourceCode.trim()}
+        disabled={compiling || !sourceCode.trim() || !connectedWallet}
         className="flex-1"
       >
         {compiling ? (
@@ -116,7 +133,12 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess }: P
         ) : (
           <Terminal className="mr-2 h-4 w-4" />
         )}
-        {compiling ? 'Compiling...' : 'Compile Contract'}
+        {!connectedWallet 
+          ? 'Connect Wallet to Compile' 
+          : compiling 
+            ? 'Compiling...' 
+            : 'Compile Contract'
+        }
       </Button>
 
       {error && (
