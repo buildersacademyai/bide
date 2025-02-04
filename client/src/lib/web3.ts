@@ -125,8 +125,17 @@ export async function deployContract(abi: any[], bytecode: string) {
     // Create contract factory
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
 
-    // Deploy contract
-    const contract = await factory.deploy();
+    // Deploy contract with proper gas estimation
+    const contract = await factory.deploy({
+      gasLimit: await factory.getDeployTransaction().then(tx => 
+        provider!.estimateGas(tx).then(estimate => 
+          // Add 20% buffer to estimated gas
+          Math.floor(estimate.toBigInt() * BigInt(120) / BigInt(100))
+        )
+      )
+    });
+
+    console.log('Deployment transaction hash:', contract.deploymentTransaction()?.hash);
 
     // Wait for deployment with timeout and retry
     const maxRetries = 3;
