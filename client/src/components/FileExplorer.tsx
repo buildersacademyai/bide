@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Folder, FileCode, ChevronDown, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Folder, FileCode, ChevronDown, Plus, Pencil, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getConnectedAccount } from '@/lib/web3';
 
@@ -55,74 +55,91 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
 
-  // Handle wallet connection and changes
+  // Handle wallet connection and changes with improved error handling
   useEffect(() => {
     const checkWallet = async () => {
-      const account = await getConnectedAccount();
-      setConnectedAddress(account);
-      if (account) {
-        // Invalidate queries when wallet changes
-        queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      try {
+        const account = await getConnectedAccount();
+        setConnectedAddress(account);
+        if (account) {
+          await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+        }
+      } catch (error) {
+        console.error('Wallet check error:', error);
+        toast({
+          variant: "destructive",
+          title: "Wallet Connection Error",
+          description: "Failed to connect to wallet. Please check MetaMask.",
+        });
       }
     };
 
-    // Initial check
     checkWallet();
 
-    // Listen for account changes
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', async (accounts: string[]) => {
+      const handleAccountsChanged = async (accounts: string[]) => {
         const newAccount = accounts[0] || null;
         setConnectedAddress(newAccount);
         if (newAccount) {
           await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
           toast({
-            title: "Wallet changed",
+            title: "Wallet Changed",
             description: `Connected to ${newAccount.slice(0, 6)}...${newAccount.slice(-4)}`,
           });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Wallet Disconnected",
+            description: "Please connect your wallet to continue.",
+          });
         }
-      });
-    }
+      };
 
-    // Cleanup
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', () => {});
-      }
-    };
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      return () => {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      };
+    }
   }, [queryClient, toast]);
 
-  // Update the query filtering logic
-  const { data: contracts = [], isLoading } = useQuery<Contract[]>({
+  // Update the query with improved error handling and retry logic
+  const { data: contracts = [], isLoading, error: queryError } = useQuery<Contract[]>({
     queryKey: ['/api/contracts', connectedAddress],
     queryFn: async () => {
       try {
-        const response = await fetch('/api/contracts');
-        if (!response.ok) {
-          console.error('Failed to fetch contracts:', response.statusText);
+        if (!connectedAddress) {
           return [];
+        }
+
+        const response = await fetch('/api/contracts', {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch contracts: ${response.statusText}`);
         }
 
         const data = await response.json();
         if (!Array.isArray(data)) {
-          console.error('Invalid response format:', data);
-          return [];
+          throw new Error('Invalid response format');
         }
 
-        // Strict filtering:
-        // 1. Show folders only if they're root folders or user created them
-        // 2. Show files only if user owns them
         return data.filter((contract: Contract) => (
-          (contract.type === 'folder' && (!contract.ownerAddress || contract.ownerAddress === connectedAddress)) || // Show root folders and user's folders
-          (contract.type === 'file' && contract.ownerAddress === connectedAddress) // Only show user's files
+          (contract.type === 'folder' && (!contract.ownerAddress || contract.ownerAddress === connectedAddress)) ||
+          (contract.type === 'file' && contract.ownerAddress === connectedAddress)
         ));
       } catch (error) {
         console.error('Error fetching contracts:', error);
-        return [];
+        throw error;
       }
     },
-    enabled: !!connectedAddress, // Only fetch when wallet is connected
-    staleTime: 1000 * 30, // Cache for 30 seconds
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    enabled: !!connectedAddress,
+    staleTime: 1000 * 30,
   });
 
   const createMutation = useMutation({
@@ -424,6 +441,25 @@ contract ${contractName} {
     return (
       <div className="w-64 border-r h-full bg-muted/30 flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (queryError) {
+    return (
+      <div className="w-64 border-r h-full bg-muted/30 flex flex-col items-center justify-center p-4">
+        <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+        <p className="text-center text-muted-foreground">
+          Failed to load contracts. Please try again.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/contracts'] })}
+        >
+          Retry
+        </Button>
       </div>
     );
   }
