@@ -52,18 +52,30 @@ export class EtherscanService {
   private static getEvmVersion(sourceCode: string): string {
     // Try to extract pragma from source code
     const pragmaMatch = sourceCode.match(/pragma\s+solidity\s+([^;]+)/);
-    if (!pragmaMatch) return 'london'; // Default to london if no pragma found
+    if (!pragmaMatch) {
+      console.log('No pragma found in source code, defaulting to london EVM version');
+      return 'london';
+    }
 
     const version = pragmaMatch[1].trim();
+    console.log('Detected Solidity version:', version);
 
-    // Map Solidity versions to appropriate EVM versions
-    if (version.includes('0.8.20')) return 'shanghai';
-    if (version.includes('0.8.19')) return 'paris';
-    if (version.includes('0.8.18')) return 'paris';
-    if (version.includes('0.8.17')) return 'london';
-    if (version.includes('0.8.16')) return 'london';
+    // Strict version mapping based on Solidity version
+    if (version.includes('0.8.20')) {
+      console.log('Solidity 0.8.20 detected - using shanghai EVM');
+      return 'shanghai';
+    }
+    if (version.includes('0.8.19') || version.includes('0.8.18')) {
+      console.log('Solidity 0.8.18/19 detected - using paris EVM');
+      return 'paris';
+    }
+    if (version.includes('0.8.17') || version.includes('0.8.16')) {
+      console.log('Solidity 0.8.16/17 detected - using london EVM');
+      return 'london';
+    }
 
     // For older versions default to london
+    console.log('Using default london EVM version for compatibility');
     return 'london';
   }
 
@@ -72,24 +84,12 @@ export class EtherscanService {
     network: string,
     evmVersion: string
   ): Promise<string> {
-    // Define all possible combinations to try, prioritizing the detected EVM version
+    // Primary attempt with detected EVM version only
     const attempts = [
-      // Primary attempt with detected EVM version
+      // First try with optimization
       { optimizationUsed: 1, runs: 200, evmversion: evmVersion },
-      { optimizationUsed: 0, runs: 200, evmversion: evmVersion },
-      // Fallback to other EVM versions in order
-      ...(evmVersion !== 'shanghai' ? [
-        { optimizationUsed: 1, runs: 200, evmversion: 'shanghai' },
-        { optimizationUsed: 0, runs: 200, evmversion: 'shanghai' }
-      ] : []),
-      ...(evmVersion !== 'paris' ? [
-        { optimizationUsed: 1, runs: 200, evmversion: 'paris' },
-        { optimizationUsed: 0, runs: 200, evmversion: 'paris' }
-      ] : []),
-      ...(evmVersion !== 'london' ? [
-        { optimizationUsed: 1, runs: 200, evmversion: 'london' },
-        { optimizationUsed: 0, runs: 200, evmversion: 'london' }
-      ] : [])
+      // Then try without optimization
+      { optimizationUsed: 0, runs: 200, evmversion: evmVersion }
     ];
 
     let lastError: Error | null = null;
@@ -121,7 +121,7 @@ export class EtherscanService {
           return response.data.result;
         }
 
-        // If bytecode mismatch or EVM version error, continue to next attempt
+        // If bytecode mismatch or EVM version error, try next attempt
         if (
           response.data.result.includes('bytecode does NOT match') ||
           response.data.result.includes('Invalid EVM version')
