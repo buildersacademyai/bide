@@ -30,8 +30,16 @@ export class EtherscanService {
     network: string = 'sepolia'
   ): Promise<string> {
     const apiKey = await this.getApiKey();
-    
+
     try {
+      if (!sourceCode?.trim()) {
+        throw new Error('Source code is required for verification');
+      }
+
+      if (!address?.trim()) {
+        throw new Error('Contract address is required for verification');
+      }
+
       const response = await axios.post(
         `https://api-${network}.etherscan.io/api`,
         null,
@@ -46,6 +54,7 @@ export class EtherscanService {
             compilerversion: 'v0.8.20', // We should get this from the contract metadata
             optimizationUsed: 1,
             runs: 200,
+            evmversion: 'london'
           },
         }
       );
@@ -57,6 +66,11 @@ export class EtherscanService {
       return response.data.result; // This is the GUID for checking verification status
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        if (error.response?.status === 403 || error.response?.status === 401) {
+          // Clear invalid API key
+          localStorage.removeItem('etherscan_api_key');
+          throw new Error('Invalid Etherscan API key. Please try again with a valid key.');
+        }
         throw new Error(
           error.response?.data?.result || 'Failed to verify contract on Etherscan'
         );
@@ -98,6 +112,13 @@ export class EtherscanService {
         };
       }
     } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 403 || error.response?.status === 401) {
+          localStorage.removeItem('etherscan_api_key');
+          throw new Error('Invalid Etherscan API key');
+        }
+        throw new Error(error.response?.data?.result || 'Failed to check verification status');
+      }
       throw new Error('Failed to check verification status');
     }
   }

@@ -141,6 +141,15 @@ export function VerifiedContracts() {
         return;
       }
 
+      if (!contract.address) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Contract address is required for verification"
+        });
+        return;
+      }
+
       toast({
         title: "Starting verification",
         description: "Verifying contract on Etherscan...",
