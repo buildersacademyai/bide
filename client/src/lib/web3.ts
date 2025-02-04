@@ -121,12 +121,17 @@ export async function deployContract(abi: any[], bytecode: string) {
   try {
     // Get the signer
     const signer = await provider.getSigner();
+    const account = await signer.getAddress();
 
     // Create contract factory
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
 
     // Deploy with better error handling
-    const contract = await factory.deploy();
+    const contract = await factory.deploy({
+      headers: {
+        'x-wallet-address': account
+      }
+    });
 
     // Wait for deployment with timeout
     const deploymentTimeout = 120000; // 2 minutes
@@ -150,13 +155,13 @@ export async function deployContract(abi: any[], bytecode: string) {
     console.error('Deployment error:', error);
 
     if (error.code === 'INSUFFICIENT_FUNDS') {
-      throw new Error('Insufficient funds for contract deployment. Please make sure you have enough ETH in your wallet.');
+      throw new Error('Insufficient funds for contract deployment');
     } else if (error.code === 4001) {
       throw new Error('Transaction rejected. Please confirm the transaction in MetaMask.');
     } else if (error.message?.includes('timeout')) {
       throw new Error('Deployment timed out. Please try again.');
-    } else if (error.message?.includes('gas')) {
-      throw new Error('Gas estimation failed. The contract might be too complex or there might be an error in the code.');
+    } else if (error.message?.includes('Failed to fetch')) {
+      throw new Error('Network connection error. Please check your internet connection and try again.');
     } else {
       throw new Error(`Failed to deploy contract: ${error.message || 'Unknown error'}`);
     }
