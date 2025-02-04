@@ -80,14 +80,40 @@ export function VerifiedContracts() {
       return;
     }
 
-    // Check if we already have an API key
-    const storedKey = localStorage.getItem('etherscan_api_key');
-    if (!storedKey) {
-      setShowApiKeyDialog(true);
+    // First check if we have a contract
+    const contract = contracts?.find(c => c.id.toString() === selectedContract);
+    if (!contract) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Selected contract not found"
+      });
       return;
     }
 
-    await verifyContract();
+    // Then check if we have an address
+    if (!contract.address) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Contract address is required for verification"
+      });
+      return;
+    }
+
+    try {
+      await verifyContract();
+    } catch (error) {
+      if (error instanceof Error && error.message === 'NO_API_KEY') {
+        setShowApiKeyDialog(true);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Verification Error",
+          description: error instanceof Error ? error.message : 'Failed to start verification'
+        });
+      }
+    }
   };
 
   const handleApiKeySubmit = async () => {
@@ -100,9 +126,25 @@ export function VerifiedContracts() {
       return;
     }
 
-    localStorage.setItem('etherscan_api_key', apiKey);
+    // Store the API key
+    localStorage.setItem('etherscan_api_key', apiKey.trim());
     setShowApiKeyDialog(false);
-    await verifyContract();
+    setApiKey('');
+
+    // Retry verification
+    try {
+      await verifyContract();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Verification Error",
+        description: error instanceof Error ? error.message : 'Failed to verify contract'
+      });
+      // If it's an invalid API key, show the dialog again
+      if (error instanceof Error && error.message.includes('Invalid Etherscan API key')) {
+        setShowApiKeyDialog(true);
+      }
+    }
   };
 
   const verifyContract = async () => {
@@ -115,44 +157,15 @@ export function VerifiedContracts() {
         throw new Error('Contract not found');
       }
 
-      console.log('Starting verification for contract:', contract);
-
-      // Get the contract source code using ContractService
-      let contractSource;
-      try {
-        contractSource = await ContractService.getContractSource(selectedContract);
-        console.log('Retrieved contract source:', contractSource ? 'Found' : 'Not found');
-      } catch (error) {
-        console.error('Error fetching contract source:', error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: error instanceof Error ? error.message : 'Failed to fetch contract source code'
-        });
-        return;
-      }
-
+      // Get the contract source code
+      const contractSource = await ContractService.getContractSource(selectedContract);
       if (!contractSource) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Contract source code not found"
-        });
-        return;
-      }
-
-      if (!contract.address) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Contract address is required for verification"
-        });
-        return;
+        throw new Error('Contract source code not found');
       }
 
       toast({
         title: "Starting verification",
-        description: "Verifying contract on Etherscan...",
+        description: "Verifying contract on Etherscan..."
       });
 
       // Start verification process
@@ -162,47 +175,38 @@ export function VerifiedContracts() {
         contract.name
       );
 
-      console.log('Verification started with GUID:', guid);
-
       // Poll for verification status
       const checkStatus = async () => {
-        try {
-          const status = await EtherscanService.checkVerificationStatus(guid);
-          console.log('Verification status:', status);
+        const status = await EtherscanService.checkVerificationStatus(guid);
 
-          if (status.status === 'pending') {
-            // Check again in 5 seconds
-            setTimeout(checkStatus, 5000);
-          } else if (status.status === 'success') {
-            // Update contract verification status in database
-            const updateResponse = await fetch(`/api/contracts/${selectedContract}/verify`, {
-              method: 'POST',
-            });
+        if (status.status === 'pending') {
+          // Check again in 5 seconds
+          setTimeout(checkStatus, 5000);
+        } else if (status.status === 'success') {
+          toast({
+            title: "Success",
+            description: "Contract successfully verified on Etherscan"
+          });
 
-            if (!updateResponse.ok) {
-              throw new Error('Failed to update contract verification status');
-            }
+          // Update verified status in database
+          await fetch(`/api/contracts/${selectedContract}/verify`, {
+            method: 'POST'
+          });
 
-            toast({
-              title: "Success",
-              description: "Contract successfully verified on Etherscan"
-            });
-
-            // Refresh the contracts lists
-            await queryClient.invalidateQueries({ queryKey: ['/api/contracts/verified'] });
-          } else {
-            throw new Error(status.message || 'Verification failed');
-          }
-        } catch (error) {
-          console.error('Status check error:', error);
-          throw error;
+          // Refresh the contracts lists
+          await queryClient.invalidateQueries({ queryKey: ['/api/contracts/verified'] });
+        } else {
+          throw new Error(status.message || 'Verification failed');
         }
       };
 
       // Start checking status
       await checkStatus();
     } catch (error) {
-      console.error('Verification error:', error);
+      if (error instanceof Error && error.message === 'NO_API_KEY') {
+        throw error; // Let the caller handle the API key dialog
+      }
+
       toast({
         variant: "destructive",
         title: "Verification failed",

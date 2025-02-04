@@ -8,19 +8,8 @@ export class EtherscanService {
       return storedKey;
     }
 
-    // If no key is stored, prompt the user
-    const apiKey = prompt(
-      'Please enter your Etherscan API key to verify contracts.\n' +
-      'You can get one from https://etherscan.io/apis'
-    );
-
-    if (!apiKey) {
-      throw new Error('Etherscan API key is required for contract verification');
-    }
-
-    // Save the key for future use
-    localStorage.setItem('etherscan_api_key', apiKey);
-    return apiKey;
+    // If no key is stored, throw an error to trigger the API key dialog
+    throw new Error('NO_API_KEY');
   }
 
   static async verifyContract(
@@ -29,9 +18,9 @@ export class EtherscanService {
     contractName: string,
     network: string = 'sepolia'
   ): Promise<string> {
-    const apiKey = await this.getApiKey();
-
     try {
+      const apiKey = await this.getApiKey();
+
       if (!sourceCode?.trim()) {
         throw new Error('Source code is required for verification');
       }
@@ -51,10 +40,12 @@ export class EtherscanService {
             contractaddress: address,
             sourceCode,
             contractname: contractName,
-            compilerversion: 'v0.8.20', // We should get this from the contract metadata
+            codeformat: 'solidity-single-file',
+            compilerversion: 'v0.8.20+commit.a1b79de6', // Making this more specific
             optimizationUsed: 1,
             runs: 200,
-            evmversion: 'london'
+            evmversion: 'london',
+            licenseType: 1 // MIT License
           },
         }
       );
@@ -65,11 +56,15 @@ export class EtherscanService {
 
       return response.data.result; // This is the GUID for checking verification status
     } catch (error) {
+      if (error.message === 'NO_API_KEY') {
+        throw error;
+      }
+
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 403 || error.response?.status === 401) {
           // Clear invalid API key
           localStorage.removeItem('etherscan_api_key');
-          throw new Error('Invalid Etherscan API key. Please try again with a valid key.');
+          throw new Error('Invalid Etherscan API key');
         }
         throw new Error(
           error.response?.data?.result || 'Failed to verify contract on Etherscan'
@@ -86,9 +81,9 @@ export class EtherscanService {
     status: 'pending' | 'success' | 'failed';
     message?: string;
   }> {
-    const apiKey = await this.getApiKey();
-
     try {
+      const apiKey = await this.getApiKey();
+
       const response = await axios.get(
         `https://api-${network}.etherscan.io/api`,
         {
@@ -112,6 +107,10 @@ export class EtherscanService {
         };
       }
     } catch (error) {
+      if (error.message === 'NO_API_KEY') {
+        throw error;
+      }
+
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 403 || error.response?.status === 401) {
           localStorage.removeItem('etherscan_api_key');
@@ -119,7 +118,7 @@ export class EtherscanService {
         }
         throw new Error(error.response?.data?.result || 'Failed to check verification status');
       }
-      throw new Error('Failed to check verification status');
+      throw error;
     }
   }
 }
