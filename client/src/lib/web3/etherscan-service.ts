@@ -53,19 +53,38 @@ export class EtherscanService {
     params: Record<string, any>,
     network: string
   ): Promise<string> {
-    // Try different optimization combinations
+    // Define all possible combinations to try
     const attempts = [
-      { optimizationUsed: 1, runs: 200 },
-      { optimizationUsed: 0, runs: 200 },
-      { optimizationUsed: 1, runs: 1000000 },
-      { optimizationUsed: 1, runs: 999999 },
+      // Hardhat default settings
+      { optimizationUsed: 1, runs: 200, evmversion: 'london' },
+      // Truffle default settings
+      { optimizationUsed: 0, runs: 200, evmversion: 'london' },
+      // Remix default settings
+      { optimizationUsed: 1, runs: 200, evmversion: 'paris' },
+      // Common deployment settings
+      { optimizationUsed: 1, runs: 1000000, evmversion: 'london' },
+      { optimizationUsed: 1, runs: 999999, evmversion: 'london' },
+      // Legacy settings
+      { optimizationUsed: 1, runs: 200, evmversion: 'berlin' },
+      { optimizationUsed: 0, runs: 200, evmversion: 'berlin' },
+      // Foundry default settings
+      { optimizationUsed: 1, runs: 200, evmversion: 'paris' },
+      { optimizationUsed: 1, runs: 1000000, evmversion: 'paris' },
+      // Try without optimization
+      { optimizationUsed: 0, runs: 0, evmversion: 'london' },
+      { optimizationUsed: 0, runs: 0, evmversion: 'paris' },
     ];
 
     let lastError: Error | null = null;
 
-    for (const opt of attempts) {
+    for (const attempt of attempts) {
       try {
-        console.log(`Attempting verification with optimization settings:`, opt);
+        console.log('Attempting verification with settings:', {
+          ...attempt,
+          network,
+          compiler: params.compilerversion,
+          contractAddress: params.contractaddress
+        });
 
         const response = await axios.post(
           `https://api-${network}.etherscan.io/api`,
@@ -73,7 +92,7 @@ export class EtherscanService {
           {
             params: {
               ...params,
-              ...opt,
+              ...attempt,
             },
           }
         );
@@ -81,12 +100,20 @@ export class EtherscanService {
         console.log('Verification response:', response.data);
 
         if (response.data.status === '1') {
+          console.log('Verification successful with settings:', attempt);
           return response.data.result;
         }
 
-        // If bytecode mismatch, try next optimization setting
-        if (response.data.result.includes('bytecode does NOT match')) {
+        // If bytecode mismatch or EVM version error, continue to next attempt
+        if (
+          response.data.result.includes('bytecode does NOT match') ||
+          response.data.result.includes('Invalid EVM version')
+        ) {
           lastError = new Error(response.data.result);
+          console.log('Verification attempt failed:', response.data.result);
+
+          // Add delay between attempts
+          await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
 
@@ -94,13 +121,22 @@ export class EtherscanService {
         throw new Error(response.data.result);
       } catch (error) {
         lastError = error as Error;
-        if (axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) {
-          throw error; // Re-throw auth errors immediately
+        console.error('Verification attempt error:', error);
+
+        if (axios.isAxiosError(error)) {
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            throw new Error('Invalid or unauthorized API key');
+          }
+          if (error.response?.status === 429) {
+            // Rate limit hit - wait longer before retry
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            continue;
+          }
         }
       }
     }
 
-    throw lastError || new Error('Verification failed with all optimization settings');
+    throw lastError || new Error('Verification failed with all attempted settings');
   }
 
   static async verifyContract(
