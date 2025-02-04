@@ -12,6 +12,7 @@ import { Loader2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { DeployedContract } from '@/lib/web3/types';
 import { EtherscanService } from '@/lib/web3/etherscan-service';
+import { ContractService } from '@/lib/web3/contract-service';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ export function VerifiedContracts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Fetch contracts
   const { data: contracts, isLoading: isLoadingContracts } = useQuery({
     queryKey: ['/api/contracts'],
     queryFn: async () => {
@@ -49,6 +51,7 @@ export function VerifiedContracts() {
     }
   });
 
+  // Fetch verified contracts
   const { data: verifiedContracts, isLoading: isLoadingVerified } = useQuery({
     queryKey: ['/api/contracts/verified'],
     queryFn: async () => {
@@ -112,19 +115,13 @@ export function VerifiedContracts() {
 
       console.log('Starting verification for contract:', contract);
 
-      // Get contract data including source code
-      const response = await fetch(`/api/contracts/${selectedContract}`);
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Contract data fetch error:', errorText);
-        throw new Error(`Failed to fetch contract data: ${errorText}`);
-      }
-
-      const contractData = await response.json();
-      console.log('Contract data:', contractData);
-
-      if (!contractData.source) {
-        throw new Error('Contract source code not found');
+      // Get the contract source code using ContractService
+      let contractSource;
+      try {
+        contractSource = await ContractService.getContractSource(selectedContract);
+      } catch (error) {
+        console.error('Error fetching contract source:', error);
+        throw new Error('Failed to fetch contract source code');
       }
 
       toast({
@@ -135,7 +132,7 @@ export function VerifiedContracts() {
       // Start verification process
       const guid = await EtherscanService.verifyContract(
         contract.address,
-        contractData.source,
+        contractSource,
         contract.name
       );
 
