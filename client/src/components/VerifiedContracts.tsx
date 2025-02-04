@@ -12,6 +12,7 @@ import { Loader2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { createToastConfig } from '@/lib/toast-config';
 import type { DeployedContract } from '@/lib/web3/types';
+import { EtherscanService } from '@/lib/web3/etherscan-service';
 
 export function VerifiedContracts() {
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
@@ -46,25 +47,58 @@ export function VerifiedContracts() {
 
     setIsVerifying(true);
     try {
-      const response = await fetch(`/api/contracts/${selectedContract}/verify`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to verify contract');
+      // Get the contract to verify
+      const contract = contracts?.find(c => c.id.toString() === selectedContract);
+      if (!contract) {
+        throw new Error('Contract not found');
       }
 
-      toast({
-        title: "Contract verified",
-        variant: "default"
-      });
+      // Get source code from API
+      const sourceResponse = await fetch(`/api/contracts/${selectedContract}/source`);
+      if (!sourceResponse.ok) {
+        throw new Error('Failed to fetch contract source');
+      }
+      const { source } = await sourceResponse.json();
 
-      // Refresh the verified contracts list
-      await queryClient.invalidateQueries({ queryKey: ['/api/contracts/verified'] });
+      // Start verification process
+      const guid = await EtherscanService.verifyContract(
+        contract.address,
+        source,
+        contract.name
+      );
+
+      // Poll for verification status
+      const checkStatus = async () => {
+        const status = await EtherscanService.checkVerificationStatus(guid);
+        if (status.status === 'pending') {
+          // Check again in 5 seconds
+          setTimeout(checkStatus, 5000);
+        } else if (status.status === 'success') {
+          // Update contract verification status in database
+          await fetch(`/api/contracts/${selectedContract}/verify`, {
+            method: 'POST',
+          });
+
+          toast({
+            title: "Contract verified",
+            description: "Successfully verified on Etherscan",
+            variant: "default"
+          });
+
+          // Refresh the contracts lists
+          await queryClient.invalidateQueries({ queryKey: ['/api/contracts/verified'] });
+        } else {
+          throw new Error(status.message || 'Verification failed');
+        }
+      };
+
+      // Start checking status
+      await checkStatus();
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Verification failed"
+        title: "Verification failed",
+        description: error instanceof Error ? error.message : 'Failed to verify contract'
       });
     } finally {
       setIsVerifying(false);
