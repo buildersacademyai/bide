@@ -86,7 +86,7 @@ export function ContractDeployer({ contractId, abi, bytecode }: Props) {
   };
 
   return (
-    <Card className="p-4">
+    <Card>
       <Button
         onClick={handleDeploy}
         disabled={deploying || !abi || !bytecode}

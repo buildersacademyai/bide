@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation } from '@tanstack/react-query';
+import { getConnectedAccount } from '@/lib/web3';
 
 interface Props {
   value: string;
@@ -19,13 +20,32 @@ export function ContractEditor({ value, onChange, contractId }: Props) {
   // Auto-save mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, sourceCode }: { id: number; sourceCode: string }) => {
+      const account = await getConnectedAccount();
+      if (!account) {
+        throw new Error('Please connect your wallet to save changes');
+      }
+
       const res = await fetch(`/api/contracts/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-wallet-address': account
+        },
         body: JSON.stringify({ sourceCode }),
       });
-      if (!res.ok) throw new Error('Failed to save changes');
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to save changes');
+      }
+
       return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Changes saved",
+        description: "Your contract has been updated successfully",
+      });
     },
     onError: (error: Error) => {
       toast({
