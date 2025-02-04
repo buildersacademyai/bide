@@ -52,12 +52,12 @@ export class EtherscanService {
   private static getEvmVersion(sourceCode: string): string {
     // Try to extract pragma from source code
     const pragmaMatch = sourceCode.match(/pragma\s+solidity\s+([^;]+)/);
-    if (!pragmaMatch) return 'paris'; // Default to latest if no pragma found
+    if (!pragmaMatch) return 'london'; // Default to london if no pragma found
 
     const version = pragmaMatch[1].trim();
 
     // Map Solidity versions to appropriate EVM versions
-    if (version.includes('0.8.20')) return 'paris';
+    if (version.includes('0.8.20')) return 'shanghai';
     if (version.includes('0.8.19')) return 'paris';
     if (version.includes('0.8.18')) return 'paris';
     if (version.includes('0.8.17')) return 'london';
@@ -77,10 +77,11 @@ export class EtherscanService {
       // Primary attempt with detected EVM version
       { optimizationUsed: 1, runs: 200, evmversion: evmVersion },
       { optimizationUsed: 0, runs: 200, evmversion: evmVersion },
-      // Fallback to other common settings with same EVM version
-      { optimizationUsed: 1, runs: 1000000, evmversion: evmVersion },
-      { optimizationUsed: 1, runs: 999999, evmversion: evmVersion },
-      // Only try alternative EVM versions if initial attempts fail
+      // Fallback to other EVM versions in order
+      ...(evmVersion !== 'shanghai' ? [
+        { optimizationUsed: 1, runs: 200, evmversion: 'shanghai' },
+        { optimizationUsed: 0, runs: 200, evmversion: 'shanghai' }
+      ] : []),
       ...(evmVersion !== 'paris' ? [
         { optimizationUsed: 1, runs: 200, evmversion: 'paris' },
         { optimizationUsed: 0, runs: 200, evmversion: 'paris' }
