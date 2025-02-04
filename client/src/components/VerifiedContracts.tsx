@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/select";
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { createToastConfig } from '@/lib/toast-config';
 import type { DeployedContract } from '@/lib/web3/types';
 import { EtherscanService } from '@/lib/web3/etherscan-service';
 
@@ -53,17 +52,28 @@ export function VerifiedContracts() {
         throw new Error('Contract not found');
       }
 
-      // Get source code from API
-      const sourceResponse = await fetch(`/api/contracts/${selectedContract}/source`);
-      if (!sourceResponse.ok) {
-        throw new Error('Failed to fetch contract source');
+      // Get contract data including source code
+      const response = await fetch(`/api/contracts/${selectedContract}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch contract data: ${errorText}`);
       }
-      const { source } = await sourceResponse.json();
+
+      let contractData;
+      try {
+        contractData = await response.json();
+      } catch (e) {
+        throw new Error('Invalid response format from server');
+      }
+
+      if (!contractData.source) {
+        throw new Error('Contract source code not found');
+      }
 
       // Start verification process
       const guid = await EtherscanService.verifyContract(
         contract.address,
-        source,
+        contractData.source,
         contract.name
       );
 
@@ -95,6 +105,7 @@ export function VerifiedContracts() {
       // Start checking status
       await checkStatus();
     } catch (error) {
+      console.error('Verification error:', error);
       toast({
         variant: "destructive",
         title: "Verification failed",
