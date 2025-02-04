@@ -16,6 +16,13 @@ export async function connectWallet() {
   try {
     provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send("eth_requestAccounts", []);
+
+    // Setup network change handler
+    window.ethereum.on('chainChanged', () => {
+      // Reload the page on network change as recommended by MetaMask
+      window.location.reload();
+    });
+
     return accounts[0];
   } catch (error: any) {
     if (error.code === 4001) {
@@ -26,18 +33,16 @@ export async function connectWallet() {
 }
 
 export async function getConnectedAccount() {
-  if (!provider) {
-    try {
-      provider = new ethers.BrowserProvider(window.ethereum);
-    } catch {
-      return null;
-    }
+  if (!window.ethereum) {
+    return null;
   }
 
   try {
+    provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send("eth_accounts", []);
     return accounts[0] || null;
-  } catch {
+  } catch (error) {
+    console.error('Error getting connected account:', error);
     return null;
   }
 }
@@ -65,7 +70,7 @@ export async function deployContract(abi: any[], bytecode: string) {
     const deploymentTimeout = 120000; // 2 minutes
     const deployed = await Promise.race([
       contract.waitForDeployment(),
-      new Promise((_, reject) => 
+      new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Deployment timed out')), deploymentTimeout)
       )
     ]);

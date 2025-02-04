@@ -55,23 +55,47 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
 
+  // Handle wallet connection and changes
   useEffect(() => {
     const checkWallet = async () => {
       const account = await getConnectedAccount();
       setConnectedAddress(account);
+      if (account) {
+        // Invalidate queries when wallet changes
+        queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      }
     };
+
+    // Initial check
     checkWallet();
-  }, []);
+
+    // Listen for account changes
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', async (accounts: string[]) => {
+        const newAccount = accounts[0] || null;
+        setConnectedAddress(newAccount);
+        if (newAccount) {
+          await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+          toast({
+            title: "Wallet changed",
+            description: `Connected to ${newAccount.slice(0, 6)}...${newAccount.slice(-4)}`,
+          });
+        }
+      });
+    }
+
+    // Cleanup
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener('accountsChanged', () => {});
+      }
+    };
+  }, [queryClient, toast]);
 
   const { data: contracts = [], isLoading } = useQuery<Contract[]>({
-    queryKey: ['/api/contracts'],
+    queryKey: ['/api/contracts', connectedAddress],
     queryFn: async () => {
       try {
-        const account = await getConnectedAccount();
-        if (!account) {
-          return [];
-        }
-
         const response = await fetch('/api/contracts');
         if (!response.ok) {
           console.error('Failed to fetch contracts:', response.statusText);
@@ -88,16 +112,15 @@ export function FileExplorer({ onFileSelect }: Props) {
         return data.filter((contract: Contract) => 
           contract.type === 'folder' || // Show all folders
           !contract.ownerAddress || // Show unowned files
-          contract.ownerAddress === account // Show user's files
+          contract.ownerAddress === connectedAddress // Show user's files
         );
       } catch (error) {
         console.error('Error fetching contracts:', error);
         return [];
       }
     },
-    enabled: true, // Always enabled to show folder structure
-    staleTime: 1000 * 60,
-    retry: false,
+    enabled: true,
+    staleTime: 1000 * 30, // Cache for 30 seconds
   });
 
   const createMutation = useMutation({
