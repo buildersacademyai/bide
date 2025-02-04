@@ -22,22 +22,36 @@ export function VerifiedContracts() {
   const { data: contracts, isLoading: isLoadingContracts } = useQuery({
     queryKey: ['/api/contracts'],
     queryFn: async () => {
-      const response = await fetch('/api/contracts');
-      if (!response.ok) {
-        throw new Error('Failed to fetch contracts');
+      try {
+        const response = await fetch('/api/contracts');
+        if (!response.ok) {
+          throw new Error('Failed to fetch contracts');
+        }
+        const data = await response.json();
+        console.log('Fetched contracts:', data); // Debug log
+        return data as DeployedContract[];
+      } catch (error) {
+        console.error('Error fetching contracts:', error);
+        throw error;
       }
-      return response.json() as Promise<DeployedContract[]>;
     }
   });
 
   const { data: verifiedContracts, isLoading: isLoadingVerified } = useQuery({
     queryKey: ['/api/contracts/verified'],
     queryFn: async () => {
-      const response = await fetch('/api/contracts/verified');
-      if (!response.ok) {
-        throw new Error('Failed to fetch verified contracts');
+      try {
+        const response = await fetch('/api/contracts/verified');
+        if (!response.ok) {
+          throw new Error('Failed to fetch verified contracts');
+        }
+        const data = await response.json();
+        console.log('Fetched verified contracts:', data); // Debug log
+        return data as DeployedContract[];
+      } catch (error) {
+        console.error('Error fetching verified contracts:', error);
+        throw error;
       }
-      return response.json() as Promise<DeployedContract[]>;
     }
   });
 
@@ -59,16 +73,21 @@ export function VerifiedContracts() {
         throw new Error('Contract not found');
       }
 
+      console.log('Starting verification for contract:', contract); // Debug log
+
       // Get contract data including source code
       const response = await fetch(`/api/contracts/${selectedContract}`);
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Contract data fetch error:', errorText); // Debug log
         throw new Error(`Failed to fetch contract data: ${errorText}`);
       }
 
       let contractData;
       try {
-        contractData = await response.json();
+        const responseText = await response.text();
+        console.log('Raw response:', responseText); // Debug log
+        contractData = JSON.parse(responseText);
       } catch (e) {
         console.error('JSON parse error:', e);
         throw new Error('Invalid response format from server');
@@ -90,32 +109,40 @@ export function VerifiedContracts() {
         contract.name
       );
 
+      console.log('Verification started with GUID:', guid); // Debug log
+
       // Poll for verification status
       const checkStatus = async () => {
-        const status = await EtherscanService.checkVerificationStatus(guid);
+        try {
+          const status = await EtherscanService.checkVerificationStatus(guid);
+          console.log('Verification status:', status); // Debug log
 
-        if (status.status === 'pending') {
-          // Check again in 5 seconds
-          setTimeout(checkStatus, 5000);
-        } else if (status.status === 'success') {
-          // Update contract verification status in database
-          const updateResponse = await fetch(`/api/contracts/${selectedContract}/verify`, {
-            method: 'POST',
-          });
+          if (status.status === 'pending') {
+            // Check again in 5 seconds
+            setTimeout(checkStatus, 5000);
+          } else if (status.status === 'success') {
+            // Update contract verification status in database
+            const updateResponse = await fetch(`/api/contracts/${selectedContract}/verify`, {
+              method: 'POST',
+            });
 
-          if (!updateResponse.ok) {
-            throw new Error('Failed to update contract verification status');
+            if (!updateResponse.ok) {
+              throw new Error('Failed to update contract verification status');
+            }
+
+            toast({
+              title: "Success",
+              description: "Contract successfully verified on Etherscan"
+            });
+
+            // Refresh the contracts lists
+            await queryClient.invalidateQueries({ queryKey: ['/api/contracts/verified'] });
+          } else {
+            throw new Error(status.message || 'Verification failed');
           }
-
-          toast({
-            title: "Success",
-            description: "Contract successfully verified on Etherscan",
-          });
-
-          // Refresh the contracts lists
-          await queryClient.invalidateQueries({ queryKey: ['/api/contracts/verified'] });
-        } else {
-          throw new Error(status.message || 'Verification failed');
+        } catch (error) {
+          console.error('Status check error:', error); // Debug log
+          throw error;
         }
       };
 
