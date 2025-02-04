@@ -49,6 +49,60 @@ export class EtherscanService {
     return 'v0.8.17+commit.8df45f5f';
   }
 
+  private static async attemptVerification(
+    params: Record<string, any>,
+    network: string
+  ): Promise<string> {
+    // Try different optimization combinations
+    const attempts = [
+      { optimizationUsed: 1, runs: 200 },
+      { optimizationUsed: 0, runs: 200 },
+      { optimizationUsed: 1, runs: 1000000 },
+      { optimizationUsed: 1, runs: 999999 },
+    ];
+
+    let lastError: Error | null = null;
+
+    for (const opt of attempts) {
+      try {
+        console.log(`Attempting verification with optimization settings:`, opt);
+
+        const response = await axios.post(
+          `https://api-${network}.etherscan.io/api`,
+          null,
+          {
+            params: {
+              ...params,
+              ...opt,
+            },
+          }
+        );
+
+        console.log('Verification response:', response.data);
+
+        if (response.data.status === '1') {
+          return response.data.result;
+        }
+
+        // If bytecode mismatch, try next optimization setting
+        if (response.data.result.includes('bytecode does NOT match')) {
+          lastError = new Error(response.data.result);
+          continue;
+        }
+
+        // For other errors, throw immediately
+        throw new Error(response.data.result);
+      } catch (error) {
+        lastError = error as Error;
+        if (axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) {
+          throw error; // Re-throw auth errors immediately
+        }
+      }
+    }
+
+    throw lastError || new Error('Verification failed with all optimization settings');
+  }
+
   static async verifyContract(
     address: string,
     sourceCode: string,
@@ -89,7 +143,6 @@ export class EtherscanService {
         network,
       });
 
-      // First try with optimization enabled
       const verificationParams = {
         module: 'contract',
         action: 'verifysourcecode',
@@ -99,32 +152,10 @@ export class EtherscanService {
         contractname: actualContractName,
         codeformat: 'solidity-single-file',
         compilerversion: compilerVersion,
-        optimizationUsed: 1,
-        runs: 200,
-        evmversion: '', // Let Etherscan determine the appropriate EVM version
-        licenseType: 1 // MIT License
+        licenseType: 1, // MIT License
       };
 
-      console.log('Sending verification request with params:', {
-        ...verificationParams,
-        apikey: '[REDACTED]',
-        sourceCode: '[REDACTED]'
-      });
-
-      const response = await axios.post(
-        `https://api-${network}.etherscan.io/api`,
-        null,
-        { params: verificationParams }
-      );
-
-      console.log('Verification API response:', response.data);
-
-      if (response.data.status === '0') {
-        console.error('Verification error:', response.data.result);
-        throw new Error(response.data.result);
-      }
-
-      return response.data.result;
+      return await this.attemptVerification(verificationParams, network);
     } catch (error) {
       if (error instanceof Error && error.message === 'NO_API_KEY') {
         throw error;
