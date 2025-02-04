@@ -55,7 +55,6 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
 
-  // Get connected wallet address
   useEffect(() => {
     const checkWallet = async () => {
       const account = await getConnectedAccount();
@@ -64,49 +63,56 @@ export function FileExplorer({ onFileSelect }: Props) {
     checkWallet();
   }, []);
 
-  // Update the query function with better error handling
   const { data: contracts = [], isLoading } = useQuery<Contract[]>({
     queryKey: ['/api/contracts'],
     queryFn: async () => {
       try {
         const account = await getConnectedAccount();
         if (!account) {
-          return []; // Return empty array if no wallet is connected
+          return [];
         }
 
         const response = await fetch('/api/contracts');
         if (!response.ok) {
           console.error('Failed to fetch contracts:', response.statusText);
-          return []; // Return empty array on error
+          return [];
         }
 
         const data = await response.json();
-        // Validate the response data
         if (!Array.isArray(data)) {
           console.error('Invalid response format:', data);
           return [];
         }
 
-        // Filter contracts by owner address or show all folders
+        // Show all folders and files owned by the user
         return data.filter((contract: Contract) => 
-          contract.type === 'folder' || contract.ownerAddress === account
+          contract.type === 'folder' || // Show all folders
+          !contract.ownerAddress || // Show unowned files
+          contract.ownerAddress === account // Show user's files
         );
       } catch (error) {
         console.error('Error fetching contracts:', error);
-        return []; // Return empty array instead of throwing
+        return [];
       }
     },
-    enabled: !!connectedAddress,
-    staleTime: 1000 * 60, // Cache for 1 minute
-    retry: false, // Don't retry failed requests
+    enabled: true, // Always enabled to show folder structure
+    staleTime: 1000 * 60,
+    retry: false,
   });
 
   const createMutation = useMutation({
     mutationFn: async (newContract: Partial<Contract>) => {
+      if (!connectedAddress && newContract.type === 'file') {
+        throw new Error('Please connect your wallet to create files');
+      }
+
       const res = await fetch('/api/contracts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newContract),
+        body: JSON.stringify({
+          ...newContract,
+          ownerAddress: newContract.type === 'file' ? connectedAddress : null,
+        }),
       });
 
       if (!res.ok) {
