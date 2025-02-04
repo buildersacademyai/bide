@@ -13,6 +13,7 @@ export const contracts = pgTable("contracts", {
   bytecode: text("bytecode"),
   address: text("address"),
   network: text("network"),
+  ownerAddress: text("owner_address"), 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

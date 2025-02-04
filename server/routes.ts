@@ -5,11 +5,26 @@ import { contracts } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import solc from 'solc';
 
+// Middleware to ensure user is authenticated with MetaMask
+const requireAuth = (req: any, res: any, next: any) => {
+  const ownerAddress = req.headers['x-owner-address'];
+  if (!ownerAddress) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  req.ownerAddress = ownerAddress;
+  next();
+};
+
 export function registerRoutes(app: Express): Server {
+  // Add authentication middleware for all contract routes
+  app.use('/api/contracts', requireAuth);
+  app.use('/api/compile', requireAuth);
+
   // Contract CRUD operations
   app.post("/api/compile", async (req, res) => {
     try {
       const { sourceCode, contractId } = req.body;
+      const ownerAddress = req.ownerAddress;
 
       if (!sourceCode) {
         return res.status(400).json({ message: "Source code is required" });
@@ -42,6 +57,18 @@ export function registerRoutes(app: Express): Server {
       const contract = output.contracts['Contract.sol'][contractName];
 
       if (contractId) {
+        // Verify ownership before updating
+        const existingContract = await db.query.contracts.findFirst({
+          where: and(
+            eq(contracts.id, contractId),
+            eq(contracts.ownerAddress, ownerAddress)
+          ),
+        });
+
+        if (!existingContract) {
+          return res.status(404).json({ message: "Contract not found or unauthorized" });
+        }
+
         // Update existing contract with new compilation results
         const [updatedContract] = await db.update(contracts)
           .set({
@@ -50,12 +77,11 @@ export function registerRoutes(app: Express): Server {
             bytecode: contract.evm.bytecode.object,
             updatedAt: new Date()
           })
-          .where(eq(contracts.id, contractId))
+          .where(and(
+            eq(contracts.id, contractId),
+            eq(contracts.ownerAddress, ownerAddress)
+          ))
           .returning();
-
-        if (!updatedContract) {
-          return res.status(404).json({ message: "Contract not found" });
-        }
 
         res.json({
           abi: contract.abi,
@@ -71,6 +97,7 @@ export function registerRoutes(app: Express): Server {
             sourceCode,
             abi: contract.abi,
             bytecode: contract.evm.bytecode.object,
+            ownerAddress, // Add owner's address
             createdAt: new Date(),
             updatedAt: new Date()
           })
@@ -93,6 +120,7 @@ export function registerRoutes(app: Express): Server {
 
   app.post("/api/contracts", async (req, res) => {
     try {
+      const ownerAddress = req.ownerAddress;
       const newContract = {
         name: req.body.name,
         type: req.body.type || 'file',
@@ -101,6 +129,7 @@ export function registerRoutes(app: Express): Server {
         sourceCode: req.body.sourceCode || null,
         abi: req.body.abi || null,
         bytecode: req.body.bytecode || null,
+        ownerAddress, // Add owner's address
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -108,7 +137,10 @@ export function registerRoutes(app: Express): Server {
       // Check if we need to create root folder first
       if (newContract.parentId) {
         const parentFolder = await db.query.contracts.findFirst({
-          where: eq(contracts.id, newContract.parentId),
+          where: and(
+            eq(contracts.id, newContract.parentId),
+            eq(contracts.ownerAddress, ownerAddress)
+          ),
         });
 
         if (!parentFolder) {
@@ -118,6 +150,7 @@ export function registerRoutes(app: Express): Server {
             type: 'folder',
             path: '',
             parentId: null,
+            ownerAddress,
             createdAt: new Date(),
             updatedAt: new Date()
           }).returning();
@@ -145,17 +178,21 @@ export function registerRoutes(app: Express): Server {
     try {
       const type = req.query.type as string;
       const name = req.query.name as string;
+      const ownerAddress = req.ownerAddress;
 
-      let query = db.select().from(contracts);
-
+      let whereClause = and(eq(contracts.ownerAddress, ownerAddress));
       if (type) {
-        query = query.where(eq(contracts.type, type));
+        whereClause = and(whereClause, eq(contracts.type, type));
       }
       if (name) {
-        query = query.where(eq(contracts.name, name));
+        whereClause = and(whereClause, eq(contracts.name, name));
       }
 
-      const allContracts = await query.orderBy(desc(contracts.createdAt));
+      const allContracts = await db.select()
+        .from(contracts)
+        .where(whereClause)
+        .orderBy(desc(contracts.createdAt));
+
       res.json(allContracts);
     } catch (err) {
       console.error('Error fetching contracts:', err);
@@ -165,8 +202,12 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/contracts/:id", async (req, res) => {
     try {
+      const ownerAddress = req.ownerAddress;
       const contract = await db.query.contracts.findFirst({
-        where: eq(contracts.id, parseInt(req.params.id)),
+        where: and(
+          eq(contracts.id, parseInt(req.params.id)),
+          eq(contracts.ownerAddress, ownerAddress)
+        ),
       });
 
       if (!contract) {
@@ -185,7 +226,7 @@ export function registerRoutes(app: Express): Server {
 
       res.json({
         ...contract,
-        source: contract.sourceCode // Ensure source field is included
+        source: contract.sourceCode
       });
     } catch (err) {
       console.error('Error fetching contract:', err);
@@ -198,19 +239,23 @@ export function registerRoutes(app: Express): Server {
 
   app.patch("/api/contracts/:id", async (req, res) => {
     try {
-      const contract = await db
+      const ownerAddress = req.ownerAddress;
+      const [contract] = await db
         .update(contracts)
         .set({
           ...req.body,
           updatedAt: new Date(),
         })
-        .where(eq(contracts.id, parseInt(req.params.id)))
+        .where(and(
+          eq(contracts.id, parseInt(req.params.id)),
+          eq(contracts.ownerAddress, ownerAddress)
+        ))
         .returning();
 
-      if (!contract.length) {
-        return res.status(404).json({ message: "Contract not found" });
+      if (!contract) {
+        return res.status(404).json({ message: "Contract not found or unauthorized" });
       }
-      res.json(contract[0]);
+      res.json(contract);
     } catch (err) {
       res.status(500).json({ message: "Failed to update contract" });
     }
@@ -218,32 +263,41 @@ export function registerRoutes(app: Express): Server {
 
   app.delete("/api/contracts/:id", async (req, res) => {
     try {
-      // First fetch the contract to check if it has compiled files
+      const ownerAddress = req.ownerAddress;
+      // First fetch the contract to check ownership
       const [contractToDelete] = await db.query.contracts.findMany({
-        where: eq(contracts.id, parseInt(req.params.id)),
+        where: and(
+          eq(contracts.id, parseInt(req.params.id)),
+          eq(contracts.ownerAddress, ownerAddress)
+        ),
       });
 
       if (!contractToDelete) {
-        return res.status(404).json({ message: "Contract not found" });
+        return res.status(404).json({ message: "Contract not found or unauthorized" });
       }
 
       // Delete all child contracts recursively
       const children = await db.query.contracts.findMany({
-        where: eq(contracts.parentId, parseInt(req.params.id)),
+        where: and(
+          eq(contracts.parentId, parseInt(req.params.id)),
+          eq(contracts.ownerAddress, ownerAddress)
+        ),
       });
 
       for (const child of children) {
-        await db.delete(contracts).where(eq(contracts.id, child.id));
+        await db.delete(contracts).where(and(
+          eq(contracts.id, child.id),
+          eq(contracts.ownerAddress, ownerAddress)
+        ));
       }
 
       // Then delete the contract itself
       const [deletedContract] = await db.delete(contracts)
-        .where(eq(contracts.id, parseInt(req.params.id)))
+        .where(and(
+          eq(contracts.id, parseInt(req.params.id)),
+          eq(contracts.ownerAddress, ownerAddress)
+        ))
         .returning();
-
-      if (!deletedContract) {
-        return res.status(404).json({ message: "Contract not found" });
-      }
 
       res.json(deletedContract);
     } catch (err) {
