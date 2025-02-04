@@ -126,44 +126,47 @@ export async function deployContract(abi: any[], bytecode: string) {
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
 
     // Deploy contract with proper gas estimation
-    const gasEstimate = await provider.estimateGas(
-      await factory.getDeployTransaction()
-    );
+    const gasEstimate = await provider.estimateGas({
+      data: bytecode
+    });
 
     // Add 20% buffer to gas estimate
     const gasLimit = gasEstimate * BigInt(120) / BigInt(100);
 
+    console.log('Deploying contract with gas limit:', gasLimit.toString());
+
+    // Deploy the contract
     const contract = await factory.deploy({
       gasLimit
     });
 
-    console.log('Deployment transaction hash:', contract.deploymentTransaction()?.hash);
-
-    // Wait for deployment with timeout and retry
-    const maxRetries = 3;
-    let currentRetry = 0;
-
-    while (currentRetry < maxRetries) {
-      try {
-        const deployed = await contract.waitForDeployment();
-        const address = await contract.getAddress();
-
-        // Verify the deployment
-        const code = await provider.getCode(address);
-        if (code === '0x') {
-          throw new Error('Contract deployment failed - no code at address');
-        }
-
-        return address;
-      } catch (retryError) {
-        currentRetry++;
-        if (currentRetry === maxRetries) {
-          throw retryError;
-        }
-        // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, currentRetry)));
-      }
+    const deployTx = contract.deploymentTransaction();
+    if (!deployTx) {
+      throw new Error('Deployment transaction failed to create');
     }
+
+    console.log('Deployment transaction hash:', deployTx.hash);
+
+    // Wait for deployment
+    console.log('Waiting for deployment transaction confirmation...');
+    const receipt = await deployTx.wait();
+
+    if (!receipt) {
+      throw new Error('Failed to get deployment receipt');
+    }
+
+    // Get deployed contract address
+    const address = await contract.getAddress();
+    console.log('Contract deployed at:', address);
+
+    // Verify contract code exists at address
+    const code = await provider.getCode(address);
+    if (code === '0x') {
+      throw new Error('Contract deployment failed - no code at address');
+    }
+
+    return address;
+
   } catch (error: any) {
     console.error('Deployment error:', error);
 
