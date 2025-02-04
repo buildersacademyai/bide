@@ -106,6 +106,8 @@ export function VerifiedContracts() {
   };
 
   const verifyContract = async () => {
+    if (!selectedContract) return;
+
     setIsVerifying(true);
     try {
       const contract = contracts?.find(c => c.id.toString() === selectedContract);
@@ -119,9 +121,24 @@ export function VerifiedContracts() {
       let contractSource;
       try {
         contractSource = await ContractService.getContractSource(selectedContract);
+        console.log('Retrieved contract source:', contractSource ? 'Found' : 'Not found');
       } catch (error) {
         console.error('Error fetching contract source:', error);
-        throw new Error('Failed to fetch contract source code');
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error instanceof Error ? error.message : 'Failed to fetch contract source code'
+        });
+        return;
+      }
+
+      if (!contractSource) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Contract source code not found"
+        });
+        return;
       }
 
       toast({

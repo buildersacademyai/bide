@@ -50,22 +50,27 @@ export class ContractService {
     return String(result);
   }
 
-  static async getContractSource(contractId: string): Promise<string> {
+  static async getContractSource(contractId: number | string): Promise<string> {
     try {
       const response = await fetch(`/api/contracts/${contractId}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch contract data');
+        const errorText = await response.text();
+        console.error('Contract fetch error:', errorText);
+        throw new Error(`Failed to fetch contract: ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('Contract data received:', data);
+
       if (!data.source) {
-        throw new Error('Contract source not found');
+        console.error('Contract data missing source:', data);
+        throw new Error('Contract source code not found in response');
       }
 
       return data.source;
     } catch (error) {
-      console.error('Error fetching contract source:', error);
-      throw error;
+      console.error('Error in getContractSource:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch contract source code');
     }
   }
 

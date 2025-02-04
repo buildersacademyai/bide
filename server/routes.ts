@@ -168,15 +168,34 @@ export function registerRoutes(app: Express): Server {
       const contract = await db.query.contracts.findFirst({
         where: eq(contracts.id, parseInt(req.params.id)),
       });
+
       if (!contract) {
+        console.error(`Contract not found with ID: ${req.params.id}`);
         return res.status(404).json({ message: "Contract not found" });
       }
-      res.json(contract);
+
+      // Check if source code exists
+      if (!contract.sourceCode) {
+        console.error(`Contract found but no source code for ID: ${req.params.id}`);
+        return res.status(404).json({ message: "Contract source code not found" });
+      }
+
+      // Log successful retrieval
+      console.log(`Successfully retrieved contract ${req.params.id} with source code`);
+
+      res.json({
+        ...contract,
+        source: contract.sourceCode // Ensure source field is included
+      });
     } catch (err) {
-      res.status(500).json({ message: "Failed to fetch contract" });
+      console.error('Error fetching contract:', err);
+      res.status(500).json({ 
+        message: "Failed to fetch contract",
+        details: err instanceof Error ? err.message : String(err)
+      });
     }
   });
-  
+
   app.patch("/api/contracts/:id", async (req, res) => {
     try {
       const contract = await db
