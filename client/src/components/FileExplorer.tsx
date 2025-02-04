@@ -64,6 +64,7 @@ export function FileExplorer({ onFileSelect }: Props) {
     checkWallet();
   }, []);
 
+  // Update the query function with better error handling
   const { data: contracts = [], isLoading } = useQuery<Contract[]>({
     queryKey: ['/api/contracts'],
     queryFn: async () => {
@@ -75,17 +76,24 @@ export function FileExplorer({ onFileSelect }: Props) {
 
         const response = await fetch('/api/contracts');
         if (!response.ok) {
-          throw new Error('Failed to fetch contracts');
+          console.error('Failed to fetch contracts:', response.statusText);
+          return []; // Return empty array on error
         }
 
         const data = await response.json();
+        // Validate the response data
+        if (!Array.isArray(data)) {
+          console.error('Invalid response format:', data);
+          return [];
+        }
+
+        // Filter contracts by owner address or show all folders
         return data.filter((contract: Contract) => 
           contract.type === 'folder' || contract.ownerAddress === account
         );
       } catch (error) {
         console.error('Error fetching contracts:', error);
-        // Return empty array instead of throwing to prevent query retries
-        return [];
+        return []; // Return empty array instead of throwing
       }
     },
     enabled: !!connectedAddress,
