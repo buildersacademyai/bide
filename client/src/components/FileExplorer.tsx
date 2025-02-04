@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Folder, FileCode, ChevronDown, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getConnectedAccount } from '@/lib/web3';
 
 interface Contract {
   id: number;
@@ -36,6 +37,7 @@ interface Contract {
   parentId: number | null;
   sourceCode?: string;
   bytecode?: string;
+  ownerAddress?: string;
 }
 
 interface Props {
@@ -51,20 +53,46 @@ export function FileExplorer({ onFileSelect }: Props) {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [itemToDelete, setItemToDelete] = useState<Contract | null>(null);
   const [itemToRename, setItemToRename] = useState<Contract | null>(null);
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
+
+  // Get connected wallet address
+  useEffect(() => {
+    const checkWallet = async () => {
+      const account = await getConnectedAccount();
+      setConnectedAddress(account);
+    };
+    checkWallet();
+  }, []);
 
   const { data: contracts = [], isLoading } = useQuery<Contract[]>({
     queryKey: ['/api/contracts'],
-    select: (data) => data.filter(contract => 
-      // Show all folders and files
-      contract.type === 'folder' || contract.type === 'file'
-    ),
-    onError: (error) => {
-      toast({
-        variant: "destructive",
-        title: "Failed to load contracts",
-        description: error instanceof Error ? error.message : "Failed to fetch contracts",
-      });
+    queryFn: async () => {
+      try {
+        const account = await getConnectedAccount();
+        if (!account) {
+          toast({
+            variant: "destructive",
+            title: "Authentication required",
+            description: "Please connect your wallet to view your contracts",
+          });
+          return [];
+        }
+
+        const response = await fetch('/api/contracts');
+        if (!response.ok) {
+          throw new Error('Failed to fetch contracts');
+        }
+        const data = await response.json();
+        // Filter contracts by owner address
+        return data.filter((contract: Contract) => 
+          contract.type === 'folder' || contract.ownerAddress === account
+        );
+      } catch (error) {
+        console.error('Error fetching contracts:', error);
+        throw error;
+      }
     },
+    enabled: !!connectedAddress, // Only fetch when wallet is connected
   });
 
   const createMutation = useMutation({
@@ -162,38 +190,45 @@ export function FileExplorer({ onFileSelect }: Props) {
   };
 
   const handleFileCreate = async (parentId: string | null = null) => {
-    if (!newItemName) return;
-  
+    if (!newItemName || !connectedAddress) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: !connectedAddress ? "Please connect your wallet first" : "Please enter a file name"
+      });
+      return;
+    }
+
     const path = parentId ? `${parentId}/${newItemName}` : newItemName;
     const fileName = newItemName.endsWith('.sol') ? newItemName : `${newItemName}.sol`;
     const contractName = fileName.replace('.sol', '');
-  
+
     const sourceCode = `// SPDX-License-Identifier: MIT
   pragma solidity ^0.8.0;
-  
+
   contract ${contractName} {
       string public message;
-  
+
       constructor() {
           message = "Hello, Blockchain!";
       }
-  
+
       function setMessage(string memory newMessage) public {
           message = newMessage;
       }
-  
+
       function getMessage() public view returns (string memory) {
           return message;
       }
   }`;
-  
+
     try {
       // First check if root folder exists
       const rootResponse = await fetch('/api/contracts?type=folder&name=Contracts');
       let rootFolder = await rootResponse.json();
-  
+
       let effectiveParentId = parentId;
-  
+
       // If no root folder exists or no parent specified, create root folder
       if (!rootFolder || (!parentId && rootFolder.length === 0)) {
         const rootFolderResponse = await fetch('/api/contracts', {
@@ -209,22 +244,28 @@ export function FileExplorer({ onFileSelect }: Props) {
         rootFolder = await rootFolderResponse.json();
         effectiveParentId = rootFolder.id.toString();
       }
-  
-      // Create the contract file
+
+      // Create the contract file with owner address
       await createMutation.mutateAsync({
         name: fileName,
         type: 'file',
         path,
         parentId: effectiveParentId ? parseInt(effectiveParentId) : null,
         sourceCode,
+        ownerAddress: connectedAddress
       });
     } catch (error) {
       console.error('Error creating file:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create file"
+      });
     }
   };
 
   const handleFolderCreate = async (parentId: string | null = null) => {
-    if (!newItemName) return;
+    if (!newItemName || !connectedAddress) return;
 
     const path = parentId ? `${parentId}/${newItemName}` : newItemName;
 
@@ -233,6 +274,7 @@ export function FileExplorer({ onFileSelect }: Props) {
       type: 'folder',
       path,
       parentId: parentId ? parseInt(parentId) : null,
+      ownerAddress: connectedAddress
     });
 
     setExpandedFolders(prev => new Set([...Array.from(prev), path]));
@@ -345,6 +387,16 @@ export function FileExplorer({ onFileSelect }: Props) {
     return (
       <div className="w-64 border-r h-full bg-muted/30 flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!connectedAddress) {
+    return (
+      <div className="w-64 border-r h-full bg-muted/30 flex flex-col items-center justify-center p-4">
+        <p className="text-center text-muted-foreground mb-4">
+          Please connect your wallet to view and manage your contracts
+        </p>
       </div>
     );
   }

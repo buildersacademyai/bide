@@ -1,25 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Copy, Check, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
+import { getConnectedAccount } from '@/lib/web3';
 
 interface DeployedContract {
   id: number;
   name: string;
   address: string;
   network: string;
+  ownerAddress: string;
 }
 
 export function DeployedContracts() {
   const { toast } = useToast();
   const [copiedAddresses, setCopiedAddresses] = useState<{[key: number]: boolean}>({});
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
 
-  const { data: contracts = [] } = useQuery<DeployedContract[]>({
+  useEffect(() => {
+    const checkWallet = async () => {
+      const account = await getConnectedAccount();
+      setConnectedAddress(account);
+    };
+    checkWallet();
+  }, []);
+
+  const { data: contracts = [], isLoading } = useQuery<DeployedContract[]>({
     queryKey: ['/api/contracts'],
-    select: (data) => data.filter(contract => contract.address),
+    select: (data) => data.filter(contract => 
+      contract.address && contract.ownerAddress === connectedAddress
+    ),
+    enabled: !!connectedAddress,
   });
 
   const handleCopyAddress = async (address: string, contractId: number) => {
@@ -40,6 +54,26 @@ export function DeployedContracts() {
       : 'https://goerli.etherscan.io/address/';
     return `${baseUrl}${address}`;
   };
+
+  if (!connectedAddress) {
+    return (
+      <Card className="p-6">
+        <p className="text-center text-muted-foreground">
+          Please connect your wallet to view your deployed contracts
+        </p>
+      </Card>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <Card className="p-6">
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </Card>
+    );
+  }
 
   if (contracts.length === 0) {
     return (
