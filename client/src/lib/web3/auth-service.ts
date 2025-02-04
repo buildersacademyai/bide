@@ -90,22 +90,31 @@ export class Web3AuthService {
     }
   };
 
-  private static handleChainChanged = async (chainId: string) => {
+  private static handleChainChanged = async (newChainId: string) => {
     try {
       // Update stored chain ID
-      this.chainId = chainId;
-      localStorage.setItem('chain_id', chainId);
+      const oldChainId = this.chainId;
+      this.chainId = newChainId;
+      localStorage.setItem('chain_id', newChainId);
 
-      // Get new provider for the new network
-      if (window.ethereum) {
+      // Only update provider if we're still connected
+      if (window.ethereum && this.address) {
         this.provider = new ethers.BrowserProvider(window.ethereum);
 
-        // Refresh the page to update all network-dependent components
-        window.location.reload();
+        // If chain ID actually changed, refresh the page
+        if (oldChainId !== newChainId) {
+          // Dispatch a custom event that components can listen to
+          window.dispatchEvent(new CustomEvent('networkChanged', {
+            detail: { chainId: newChainId }
+          }));
+        }
       }
     } catch (error) {
       console.error('Error handling network change:', error);
-      await this.disconnect();
+      // Only disconnect if there's an actual error, not just a network change
+      if (error.message !== 'underlying network changed') {
+        await this.disconnect();
+      }
     }
   };
 }

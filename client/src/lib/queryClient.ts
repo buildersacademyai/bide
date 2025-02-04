@@ -14,12 +14,14 @@ export async function apiRequest(
   headers?: Record<string, string>
 ): Promise<Response> {
   const address = localStorage.getItem('wallet_address');
+  const chainId = localStorage.getItem('chain_id');
 
   const res = await fetch(url, {
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
       ...(address ? { "x-owner-address": address } : {}),
+      ...(chainId ? { "x-chain-id": chainId } : {}),
       ...headers
     },
     body: data ? JSON.stringify(data) : undefined,
@@ -37,10 +39,14 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const address = localStorage.getItem('wallet_address');
+    const chainId = localStorage.getItem('chain_id');
     const headers: Record<string, string> = {};
 
     if (address) {
       headers['x-owner-address'] = address;
+    }
+    if (chainId) {
+      headers['x-chain-id'] = chainId;
     }
 
     const res = await fetch(queryKey[0] as string, {
@@ -69,4 +75,10 @@ export const queryClient = new QueryClient({
       retry: false,
     },
   },
+});
+
+// Listen for network changes and invalidate queries
+window.addEventListener('networkChanged', () => {
+  // Invalidate all queries when the network changes
+  queryClient.invalidateQueries();
 });
