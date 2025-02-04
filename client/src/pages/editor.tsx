@@ -173,8 +173,11 @@ export default function Editor() {
                 Interact
               </TabsTrigger>
               <TabsTrigger value="verify" className="gap-2">
-                <CheckCircle2 className="w-4 h-4" />
+                <CheckCircle2 className="h-4 w-4" />
                 Verify
+                <span className="bg-yellow-500/10 text-yellow-500 text-xs px-1.5 rounded-sm">
+                  Soon
+                </span>
               </TabsTrigger>
             </TabsList>
 
