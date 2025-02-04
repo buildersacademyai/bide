@@ -1,4 +1,4 @@
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { UserProfile } from "./UserProfile";
 import { useQuery } from "@tanstack/react-query";
@@ -38,8 +38,8 @@ export function Navigation() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <Link href="/">
-              <a className="flex items-center transition-colors hover:text-primary">
+            <Button variant="link" className="p-0" asChild>
+              <a href="/" className="flex items-center transition-colors hover:text-primary">
                 <svg
                   className="h-8 w-8 text-primary"
                   viewBox="0 0 24 24"
@@ -55,22 +55,22 @@ export function Navigation() {
                 </svg>
                 <span className="ml-2 text-xl font-bold">Blockchain IDE</span>
               </a>
-            </Link>
+            </Button>
           </div>
 
           <div className="flex items-center gap-4">
-            <Link href="/about">
-              <a className="text-sm font-medium transition-colors hover:text-primary">
+            <Button variant="link" className="p-0" asChild>
+              <a href="/about" className="text-sm font-medium transition-colors hover:text-primary">
                 About Us
               </a>
-            </Link>
+            </Button>
 
             {!isAppPage && (
-              <Link href="/app">
-                <Button className="bg-primary hover:bg-primary/90">
+              <Button variant="link" className="p-0" asChild>
+                <a href="/app" className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                   Launch App
-                </Button>
-              </Link>
+                </a>
+              </Button>
             )}
 
             {isLoading ? (
