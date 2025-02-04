@@ -63,7 +63,7 @@ export function UserProfile({ address }: { address: string }) {
             <div>
               <div className="text-sm font-medium">Wallet Address</div>
               <code className="text-xs text-muted-foreground block mt-1 bg-muted p-2 rounded">
-                {address}
+                {address.slice(0,8)}...{address.slice(30)}
               </code>
             </div>
 

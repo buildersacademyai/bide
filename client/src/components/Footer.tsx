@@ -19,7 +19,7 @@ export function Footer() {
   };
 
   return (
-    <footer className="w-full mx-auto border-t py-6 bg-background flex flex-col">
+    <footer className="max-w-7xl mx-auto border-t py-6 bg-background flex flex-col">
       <div className="container mx-auto flex flex-col items-center justify-between gap-4 md:h-16 md:flex-row md:py-0">
         <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
           <p className="text-sm text-muted-foreground flex items-center gap-1">

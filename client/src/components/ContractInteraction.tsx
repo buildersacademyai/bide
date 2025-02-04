@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { ethers } from 'ethers';
 import { Loader2 } from 'lucide-react';
 import {
   Select,
@@ -18,65 +16,24 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useContractInteraction } from '@/hooks/use-contract-interaction';
+import type { ContractFunction } from '@/lib/web3/types';
 
-// Helper function to format result values
-function formatResult(result: any): string {
-  if (result === null || result === undefined) {
-    return 'No value';
-  }
-  if (result._isBigNumber || typeof result === 'bigint') {
-    return result.toString();
-  }
-  if (Array.isArray(result)) {
-    return result.map(item => formatResult(item)).join(', ');
-  }
-  if (typeof result === 'object') {
-    try {
-      return JSON.stringify(result, (_, value) =>
-        typeof value === 'bigint' ? value.toString() : value
-      , 2);
-    } catch (e) {
-      return 'Complex object';
-    }
-  }
-  return String(result);
+interface FunctionFormProps {
+  func: ContractFunction;
+  onSubmit: (inputs: string[]) => Promise<void>;
 }
 
-// Separate component for function form to properly handle state
-function FunctionForm({ func, contractAddress, abi, onResult }: {
-  func: any;
-  contractAddress: string;
-  abi: any[];
-  onResult: (functionName: string, result: string) => void;
-}) {
-  const [inputValues, setInputValues] = useState<string[]>(Array(func.inputs.length).fill(''));
+function FunctionForm({ func, onSubmit }: FunctionFormProps) {
+  const [inputValues, setInputValues] = useState<string[]>(
+    Array(func.inputs.length).fill('')
+  );
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleCall = async () => {
+  const handleSubmit = async () => {
     setIsLoading(true);
     try {
-      if (!window.ethereum) {
-        throw new Error('MetaMask is not installed');
-      }
-
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(contractAddress, abi, signer);
-
-      // Convert input values based on parameter types
-      const convertedInputs = inputValues.map((value, index) => {
-        const type = func.inputs[index].type;
-        if (type?.startsWith('uint')) {
-          return ethers.parseUnits(value || '0', 0);
-        }
-        return value;
-      });
-
-      const result = await contract[func.name](...convertedInputs);
-      onResult(func.name, formatResult(result));
-    } catch (err) {
-      console.error('Contract call error:', err);
-      onResult(func.name, err instanceof Error ? err.message : 'Call failed');
+      await onSubmit(inputValues);
     } finally {
       setIsLoading(false);
     }
@@ -91,7 +48,7 @@ function FunctionForm({ func, contractAddress, abi, onResult }: {
         </span>
       </div>
 
-      {func.inputs.map((input: any, idx: number) => (
+      {func.inputs.map((input, idx) => (
         <div key={idx} className="mb-2">
           <Label>{input.name} ({input.type})</Label>
           <Input
@@ -107,7 +64,7 @@ function FunctionForm({ func, contractAddress, abi, onResult }: {
       ))}
 
       <Button
-        onClick={handleCall}
+        onClick={handleSubmit}
         disabled={isLoading}
         className="mt-2"
       >
@@ -119,26 +76,17 @@ function FunctionForm({ func, contractAddress, abi, onResult }: {
 }
 
 export function ContractInteraction() {
-  const [selectedContract, setSelectedContract] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, string>>({});
+  const {
+    contracts,
+    selectedContract,
+    selectedContractData,
+    results,
+    isLoading,
+    setSelectedContract,
+    handleCall
+  } = useContractInteraction();
 
-  // Fetch all deployed contracts
-  const { data: contracts, isLoading: isLoadingContracts } = useQuery({
-    queryKey: ['/api/contracts'],
-    queryFn: async () => {
-      const response = await fetch('/api/contracts');
-      if (!response.ok) {
-        throw new Error('Failed to fetch contracts');
-      }
-      return response.json();
-    }
-  });
-
-  const handleResult = (functionName: string, result: string) => {
-    setResults(prev => ({ ...prev, [functionName]: result }));
-  };
-
-  if (isLoadingContracts) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -146,19 +94,13 @@ export function ContractInteraction() {
     );
   }
 
-  const deployedContracts = contracts?.filter((c: any) => c.address && c.abi);
-
-  if (!deployedContracts?.length) {
+  if (!contracts.length) {
     return (
       <div className="text-center text-muted-foreground p-8">
         No deployed contracts found. Deploy a contract first to interact with it.
       </div>
     );
   }
-
-  const selectedContractData = selectedContract 
-    ? deployedContracts.find((c: any) => c.id.toString() === selectedContract)
-    : null;
 
   return (
     <div className="space-y-6">
@@ -172,7 +114,7 @@ export function ContractInteraction() {
             <SelectValue placeholder="Select a contract to interact with" />
           </SelectTrigger>
           <SelectContent>
-            {deployedContracts.map((contract: any) => (
+            {contracts.map((contract) => (
               <SelectItem key={contract.id} value={contract.id.toString()}>
                 {contract.name} ({contract.address.slice(0, 6)}...{contract.address.slice(-4)})
               </SelectItem>
@@ -186,19 +128,17 @@ export function ContractInteraction() {
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="functions">
               <AccordionTrigger className="text-lg font-semibold">
-                Functions ({selectedContractData.abi.filter((item: any) => item.type === 'function').length})
+                Functions ({selectedContractData.abi.filter(item => item.type === 'function').length})
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-4 pt-4">
                   {selectedContractData.abi
-                    .filter((item: any) => item.type === 'function')
-                    .map((func: any) => (
+                    .filter(item => item.type === 'function')
+                    .map((func) => (
                       <div key={func.name}>
                         <FunctionForm
                           func={func}
-                          contractAddress={selectedContractData.address}
-                          abi={selectedContractData.abi}
-                          onResult={handleResult}
+                          onSubmit={(inputs) => handleCall(func.name, inputs)}
                         />
                         {results[func.name] && (
                           <div className="mt-2 p-2 bg-muted rounded-md">
@@ -216,17 +156,17 @@ export function ContractInteraction() {
 
             <AccordionItem value="events">
               <AccordionTrigger className="text-lg font-semibold">
-                Events ({selectedContractData.abi.filter((item: any) => item.type === 'event').length})
+                Events ({selectedContractData.abi.filter(item => item.type === 'event').length})
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-4 pt-4">
                   {selectedContractData.abi
-                    .filter((item: any) => item.type === 'event')
-                    .map((event: any) => (
+                    .filter(item => item.type === 'event')
+                    .map((event) => (
                       <div key={event.name} className="p-4 border rounded-lg">
                         <h4 className="font-medium">{event.name}</h4>
                         <div className="mt-2 text-sm text-muted-foreground">
-                          {event.inputs.map((input: any, idx: number) => (
+                          {event.inputs.map((input, idx) => (
                             <div key={idx}>
                               {input.name} ({input.type})
                               {input.indexed && ' [indexed]'}
@@ -241,27 +181,27 @@ export function ContractInteraction() {
 
             <AccordionItem value="variables">
               <AccordionTrigger className="text-lg font-semibold">
-                View Variables ({selectedContractData.abi.filter((item: any) => 
-                  item.type === 'function' && 
-                  item.stateMutability === 'view' && 
-                  item.inputs.length === 0
-                ).length})
+                View Variables ({
+                  selectedContractData.abi.filter(item => 
+                    item.type === 'function' && 
+                    item.stateMutability === 'view' && 
+                    item.inputs.length === 0
+                  ).length
+                })
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-4 pt-4">
                   {selectedContractData.abi
-                    .filter((item: any) => 
+                    .filter(item => 
                       item.type === 'function' && 
                       item.stateMutability === 'view' && 
                       item.inputs.length === 0
                     )
-                    .map((variable: any) => (
+                    .map((variable) => (
                       <div key={variable.name}>
                         <FunctionForm
                           func={variable}
-                          contractAddress={selectedContractData.address}
-                          abi={selectedContractData.abi}
-                          onResult={handleResult}
+                          onSubmit={(inputs) => handleCall(variable.name, inputs)}
                         />
                         {results[variable.name] && (
                           <div className="mt-2 p-2 bg-muted rounded-md">
