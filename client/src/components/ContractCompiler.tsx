@@ -1,43 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2, Terminal, Rocket } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-import { getConnectedAccount, deployContract } from '@/lib/web3';
+import { connectWallet, deployContract } from '@/lib/web3';
 
 interface Props {
   sourceCode: string;
-  contractId?: number;
-  onCompileSuccess: (abi: any[], bytecode: string) => void;
-  onDeploySuccess?: (address: string) => void;
 }
 
-export function ContractCompiler({ sourceCode, contractId, onCompileSuccess, onDeploySuccess }: Props) {
+export function ContractCompiler({ sourceCode }: Props) {
   const { toast } = useToast();
   const [compiling, setCompiling] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastCompiledCode, setLastCompiledCode] = useState<string>('');
   const [compiledContract, setCompiledContract] = useState<{ abi: any[], bytecode: string } | null>(null);
-  const queryClient = useQueryClient();
-  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
-
-  useEffect(() => {
-    const checkWalletConnection = async () => {
-      const account = await getConnectedAccount();
-      setConnectedWallet(account);
-    };
-
-    checkWalletConnection();
-
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', checkWalletConnection);
-      return () => {
-        window.ethereum.removeListener('accountsChanged', checkWalletConnection);
-      };
-    }
-  }, []);
+  const [deployedAddress, setDeployedAddress] = useState<string | null>(null);
 
   const handleDeploy = async () => {
     if (!compiledContract) {
@@ -53,30 +31,14 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess, onD
     setError(null);
 
     try {
-      toast({
-        title: "Deploying contract",
-        description: "Please confirm the transaction in your wallet...",
-      });
-
+      await connectWallet();
       const address = await deployContract(compiledContract.abi, compiledContract.bytecode);
-
-      // Update deployment status in the UI
-      if (onDeploySuccess) {
-        onDeploySuccess(address);
-      }
-
-      // Invalidate queries to refresh contract list
-      await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      setDeployedAddress(address);
 
       toast({
-        title: "Deployment successful",
+        title: "Success",
         description: `Contract deployed at ${address}`,
       });
-
-      // Clear compilation state after successful deployment
-      setCompiledContract(null);
-      setLastCompiledCode('');
-
     } catch (err) {
       console.error('Deployment error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Deployment failed';
@@ -92,23 +54,6 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess, onD
   };
 
   const handleCompile = async () => {
-    if (!connectedWallet) {
-      toast({
-        variant: "destructive",
-        title: "Wallet not connected",
-        description: "Please connect your wallet to compile contracts",
-      });
-      return;
-    }
-
-    if (sourceCode === lastCompiledCode) {
-      toast({
-        title: "No changes detected",
-        description: "The contract code hasn't changed since the last compilation.",
-      });
-      return;
-    }
-
     if (!sourceCode.trim()) {
       setError('Source code cannot be empty');
       return;
@@ -116,19 +61,12 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess, onD
 
     setCompiling(true);
     setError(null);
-    setCompiledContract(null);
 
     try {
       const response = await fetch('/api/compile', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-wallet-address': connectedWallet
-        },
-        body: JSON.stringify({ 
-          sourceCode,
-          contractId 
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceCode })
       });
 
       const data = await response.json();
@@ -137,15 +75,12 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess, onD
         throw new Error(data.message || 'Compilation failed');
       }
 
-      setLastCompiledCode(sourceCode);
       setCompiledContract({ abi: data.abi, bytecode: data.bytecode });
 
       toast({
-        title: "Compilation successful",
+        title: "Success",
         description: "Contract compiled successfully",
       });
-
-      onCompileSuccess(data.abi, data.bytecode);
     } catch (err) {
       console.error('Compilation error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Compilation failed';
@@ -160,57 +95,47 @@ export function ContractCompiler({ sourceCode, contractId, onCompileSuccess, onD
     }
   };
 
-  const renderActionButton = () => {
-    if (deploying) {
-      return (
-        <Button disabled className="flex-1">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Deploying...
-        </Button>
-      );
-    }
-
-    if (compiledContract && !compiling) {
-      return (
-        <Button onClick={handleDeploy} disabled={!connectedWallet} className="flex-1">
-          <Rocket className="mr-2 h-4 w-4" />
-          Deploy Contract
-        </Button>
-      );
-    }
-
-    return (
-      <Button 
-        onClick={handleCompile} 
-        disabled={compiling || !sourceCode.trim() || !connectedWallet}
-        className="flex-1"
-      >
-        {compiling ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Terminal className="mr-2 h-4 w-4" />
-        )}
-        {!connectedWallet 
-          ? 'Connect Wallet to Compile' 
-          : compiling 
-            ? 'Compiling...' 
-            : 'Compile Contract'
-        }
-      </Button>
-    );
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        {renderActionButton()}
+        <Button 
+          onClick={handleCompile} 
+          disabled={compiling}
+          className="flex-1"
+        >
+          {compiling ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Terminal className="mr-2 h-4 w-4" />
+          )}
+          {compiling ? 'Compiling...' : 'Compile Contract'}
+        </Button>
+
+        {compiledContract && !compiling && (
+          <Button onClick={handleDeploy} disabled={deploying} className="flex-1">
+            {deploying ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Rocket className="mr-2 h-4 w-4" />
+            )}
+            {deploying ? 'Deploying...' : 'Deploy Contract'}
+          </Button>
+        )}
       </div>
 
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="whitespace-pre-wrap font-mono text-sm mt-2">
+          <AlertDescription>
             {error}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {deployedAddress && (
+        <Alert>
+          <AlertDescription>
+            Contract deployed at: {deployedAddress}
           </AlertDescription>
         </Alert>
       )}
