@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { Router } from 'express';
 import { db } from "@db";
 import { contracts } from "@db/schema";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -63,6 +64,10 @@ router.post('/api/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
+    if (!walletAddress) {
+      return res.status(401).json({ error: 'Wallet address is required' });
+    }
+
     const isGenerateRequest = isContractRequest(message);
     let contractCode = null;
     let contractName = null;
@@ -83,23 +88,47 @@ router.post('/api/chat', async (req, res) => {
 
       contractCode = completion.choices[0]?.message?.content || null;
 
-      if (contractCode && walletAddress) {
-        // Create a new file in the explorer
-        const fileName = `${contractName}.sol`;
-        await db.insert(contracts).values({
-          name: fileName,
-          type: 'file',
-          sourceCode: contractCode,
-          ownerAddress: walletAddress.toLowerCase(),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
+      if (contractCode) {
+        try {
+          // First check if root folder exists
+          const rootFolderResult = await db.select().from(contracts).where(eq(contracts.name, 'Contracts')).limit(1);
+          let rootFolder = rootFolderResult[0];
 
-        return res.json({
-          message: `I've generated the ${contractName} contract and created a new file ${fileName} in your explorer. You can now find it in your files list.`,
-          contractCode,
-          contractName: fileName
-        });
+          // If no root folder exists, create it
+          if (!rootFolder) {
+            const [newRootFolder] = await db.insert(contracts).values({
+              name: 'Contracts',
+              type: 'folder',
+              path: '',
+              parentId: null,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }).returning();
+            rootFolder = newRootFolder;
+          }
+
+          // Create the contract file with owner address
+          const fileName = `${contractName}.sol`;
+          const [newContract] = await db.insert(contracts).values({
+            name: fileName,
+            type: 'file',
+            path: `${rootFolder.id}/${fileName}`,
+            parentId: rootFolder.id,
+            sourceCode: contractCode,
+            ownerAddress: walletAddress.toLowerCase(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }).returning();
+
+          return res.json({
+            message: `I've generated the ${contractName} contract and created a new file ${fileName} in your explorer. You can now find it in your files list.`,
+            contractCode,
+            contractName: fileName
+          });
+        } catch (error) {
+          console.error('Error creating contract file:', error);
+          throw new Error('Failed to create contract file');
+        }
       }
     }
 
