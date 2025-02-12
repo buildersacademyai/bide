@@ -12,28 +12,24 @@ export async function deployContract(
   walletAddress: string
 ): Promise<DeploymentResult> {
   try {
-    if (!window.ethereum) {
-      throw new Error('MetaMask not detected');
-    }
-
-    // Create a provider and signer
+    // Create provider using the user's wallet
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner(walletAddress);
-    
+
     // Get the network information
     const network = await provider.getNetwork();
     const networkName = network.name.toLowerCase();
 
     // Create contract factory
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
-    
+
     // Deploy the contract
     const contract = await factory.deploy();
     await contract.waitForDeployment();
 
     const address = await contract.getAddress();
     const deployTransaction = contract.deploymentTransaction();
-    
+
     if (!deployTransaction) {
       throw new Error('No deployment transaction found');
     }

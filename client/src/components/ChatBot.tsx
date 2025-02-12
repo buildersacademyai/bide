@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getConnectedAccount } from '@/lib/web3';
+import { ethers } from 'ethers';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -22,7 +23,10 @@ interface ChatResponse {
   action?: 'compile' | 'deploy';
   success?: boolean;
   compilation?: any;
-  deployment?: any;
+  deployment?: {
+    bytecode: string;
+    abi: any[];
+  };
 }
 
 interface Props {
@@ -66,6 +70,43 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
     return () => clearInterval(interval);
   }, [connectedAddress, queryClient, toast]);
 
+  const deployContract = async (bytecode: string, abi: any[]) => {
+    try {
+      if (!window.ethereum) {
+        throw new Error('MetaMask not detected. Please install MetaMask to deploy contracts.');
+      }
+
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No accounts found. Please connect your wallet.');
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      const factory = new ethers.ContractFactory(abi, bytecode, signer);
+      const contract = await factory.deploy();
+      await contract.waitForDeployment();
+
+      const address = await contract.getAddress();
+      const deployTransaction = contract.deploymentTransaction();
+
+      if (!deployTransaction) {
+        throw new Error('No deployment transaction found');
+      }
+
+      const network = await provider.getNetwork();
+
+      return {
+        address,
+        network: network.name.toLowerCase(),
+        transactionHash: deployTransaction.hash
+      };
+    } catch (error: any) {
+      throw new Error(`Deployment failed: ${error.message}`);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -93,7 +134,7 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
         },
         body: JSON.stringify({ 
           message: userMessage,
-          contractId: currentContractId // Pass the current contract ID
+          contractId: currentContractId
         }),
       });
 
@@ -104,7 +145,6 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
 
       const data: ChatResponse = await response.json();
 
-      // Handle compile action
       if (data.action === 'compile') {
         if (!data.success) {
           setMessages(prev => [...prev, { 
@@ -125,28 +165,38 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
         return;
       }
 
-      // Handle deploy action
       if (data.action === 'deploy') {
-        if (!data.success) {
+        if (!data.success || !data.deployment) {
           setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: data.message || 'Deployment failed. Please ensure your contract is compiled and you have enough ETH for gas.'
+            content: data.message || 'Deployment failed. Please ensure your contract is compiled.'
           }]);
           return;
         }
 
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: `Contract deployed successfully! You can now interact with it at address: ${data.deployment?.address}`
-        }]);
+        try {
+          const deploymentResult = await deployContract(
+            data.deployment.bytecode,
+            data.deployment.abi
+          );
 
-        if (onDeploy && data.deployment) {
-          await onDeploy(data.deployment);
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: `Contract deployed successfully! You can now interact with it at address: ${deploymentResult.address}`
+          }]);
+
+          if (onDeploy) {
+            await onDeploy(deploymentResult);
+          }
+        } catch (error: any) {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: `Deployment failed: ${error.message}`
+          }]);
         }
         return;
       }
 
-      // Handle contract generation
       if (data.contractCode && data.contractName && data.contractId) {
         await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 

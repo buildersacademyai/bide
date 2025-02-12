@@ -172,7 +172,7 @@ router.post('/api/chat', async (req, res) => {
           success: true,
           compilation: compilationResult
         });
-      } catch (error) {
+      } catch (error: any) {
         return res.status(400).json({
           message: `Compilation failed: ${error.message}`,
           action: "compile",
@@ -203,37 +203,16 @@ router.post('/api/chat', async (req, res) => {
         });
       }
 
-      try {
-        // Deploy the contract
-        const deploymentResult = await deployContract(
-          contract.bytecode,
-          JSON.parse(contract.abi),
-          walletAddress
-        );
-
-        // Update contract in database with deployment info
-        await db.update(contracts)
-          .set({
-            address: deploymentResult.address,
-            network: deploymentResult.network,
-            deployedAt: new Date(),
-            updatedAt: new Date()
-          })
-          .where(eq(contracts.id, contractId));
-
-        return res.json({
-          message: `Contract deployed successfully at ${deploymentResult.address}`,
-          action: "deploy",
-          success: true,
-          deployment: deploymentResult
-        });
-      } catch (error) {
-        return res.status(400).json({
-          message: `Deployment failed: ${error.message}`,
-          action: "deploy",
-          success: false
-        });
-      }
+      // Return the contract data for client-side deployment
+      return res.json({
+        message: "Ready for deployment",
+        action: "deploy",
+        success: true,
+        deployment: {
+          bytecode: contract.bytecode,
+          abi: JSON.parse(contract.abi)
+        }
+      });
     }
 
     const isGenerateRequest = isContractRequest(message);
@@ -333,7 +312,7 @@ Format the contract following Solidity style guide.`;
 
     const response = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response';
     res.json({ message: response });
-  } catch (error) {
+  } catch (error: any) {
     console.error('API error:', error);
     res.status(500).json({ 
       error: 'Failed to process your request',
