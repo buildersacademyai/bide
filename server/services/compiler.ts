@@ -54,7 +54,14 @@ export async function compileContract(sourceCode: string): Promise<CompileResult
 
     // Get the contract
     const contractFile = Object.keys(output.contracts['contract.sol'])[0];
+    if (!contractFile) {
+      throw new Error('No contract found in compilation output');
+    }
+
     const contract = output.contracts['contract.sol'][contractFile];
+    if (!contract || !contract.abi || !contract.evm) {
+      throw new Error('Invalid compilation output structure');
+    }
 
     return {
       abi: contract.abi,

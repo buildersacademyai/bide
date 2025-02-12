@@ -145,9 +145,17 @@ router.post('/api/chat', async (req, res) => {
         where: eq(contracts.id, contractId)
       });
 
-      if (!contract || !contract.sourceCode) {
+      if (!contract) {
         return res.status(404).json({
-          message: "Contract not found or has no source code",
+          message: "Contract not found",
+          action: "compile",
+          success: false
+        });
+      }
+
+      if (!contract.sourceCode) {
+        return res.status(400).json({
+          message: "Contract has no source code",
           action: "compile",
           success: false
         });
