@@ -26,9 +26,10 @@ interface Props {
   onFileSelect?: (content: string, contractId: number) => void;
   onCompile?: () => Promise<boolean>;
   onDeploy?: () => Promise<boolean>;
+  currentContractId?: number; // Add current contract ID prop
 }
 
-export function ChatBot({ onFileSelect, onCompile, onDeploy }: Props) {
+export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -98,6 +99,14 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy }: Props) {
       const data: ChatResponse = await response.json();
 
       if (data.action === 'compile' && onCompile) {
+        if (!currentContractId) {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: 'Please open a contract in the editor first before compiling.' 
+          }]);
+          return;
+        }
+
         setMessages(prev => [...prev, { role: 'assistant', content: 'Starting compilation...' }]);
         try {
           const success = await onCompile();
