@@ -4,7 +4,6 @@ import { db } from "@db";
 import { contracts } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { compileContract } from '../services/compiler';
-import { deployContract } from '../services/deployer';
 import { prepareDeploymentData } from '../services/deployer';
 
 const router = Router();
