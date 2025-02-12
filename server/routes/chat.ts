@@ -112,7 +112,7 @@ router.post('/api/chat', async (req, res) => {
           const [newContract] = await db.insert(contracts).values({
             name: fileName,
             type: 'file',
-            path: `${rootFolder.id}/${fileName}`,
+            path: `/${fileName}`,
             parentId: rootFolder.id,
             sourceCode: contractCode,
             ownerAddress: walletAddress.toLowerCase(),
@@ -123,11 +123,15 @@ router.post('/api/chat', async (req, res) => {
           return res.json({
             message: `I've generated the ${contractName} contract and created a new file ${fileName} in your explorer. You can now find it in your files list.`,
             contractCode,
-            contractName: fileName
+            contractName: fileName,
+            contractId: newContract.id
           });
         } catch (error) {
           console.error('Error creating contract file:', error);
-          throw new Error('Failed to create contract file');
+          return res.status(500).json({ 
+            error: 'Failed to create contract file',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          });
         }
       }
     }

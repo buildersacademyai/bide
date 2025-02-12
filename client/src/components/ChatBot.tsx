@@ -18,6 +18,7 @@ interface ChatResponse {
   message: string;
   contractCode?: string;
   contractName?: string;
+  contractId?: number;
 }
 
 export function ChatBot() {
@@ -66,7 +67,8 @@ export function ChatBot() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        const error = await response.json();
+        throw new Error(error.details || 'Failed to get response');
       }
 
       const data: ChatResponse = await response.json();
@@ -87,8 +89,14 @@ export function ChatBot() {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Sorry, I encountered an error. Please make sure your wallet is connected and try again.' 
+        content: error instanceof Error ? error.message : 'Sorry, I encountered an error. Please make sure your wallet is connected and try again.'
       }]);
+
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Failed to process your request'
+      });
     } finally {
       setIsLoading(false);
     }
