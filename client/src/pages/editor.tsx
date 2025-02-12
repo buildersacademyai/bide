@@ -259,7 +259,7 @@ export default function Editor() {
           </Tabs>
         </div>
       </div>
-      <ChatBot />
+      <ChatBot onFileSelect={handleFileSelect} />
     </div>
   );
 }

@@ -21,7 +21,11 @@ interface ChatResponse {
   contractId?: number;
 }
 
-export function ChatBot() {
+interface Props {
+  onFileSelect?: (content: string, contractId: number) => void;
+}
+
+export function ChatBot({ onFileSelect }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -74,7 +78,7 @@ export function ChatBot() {
       const data: ChatResponse = await response.json();
 
       // Handle contract generation response
-      if (data.contractCode && data.contractName) {
+      if (data.contractCode && data.contractName && data.contractId) {
         // Invalidate contracts query to refresh file explorer
         await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
@@ -82,6 +86,11 @@ export function ChatBot() {
           title: "Contract Generated",
           description: `Created new contract: ${data.contractName}`,
         });
+
+        // Load the contract into the editor if onFileSelect is provided
+        if (onFileSelect) {
+          onFileSelect(data.contractCode, data.contractId);
+        }
       }
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);

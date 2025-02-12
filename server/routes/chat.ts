@@ -120,6 +120,11 @@ router.post('/api/chat', async (req, res) => {
             updatedAt: new Date()
           }).returning();
 
+          // Force refresh file list by invalidating cache
+          await db.update(contracts)
+            .set({ updatedAt: new Date() })
+            .where(eq(contracts.id, rootFolder.id));
+
           return res.json({
             message: `I've generated the ${contractName} contract and created a new file ${fileName} in your explorer. You can now find it in your files list.`,
             contractCode,
