@@ -23,9 +23,7 @@ When asked to generate a smart contract:
 2. Include SPDX license and pragma directive
 3. Add comprehensive comments explaining functionality
 4. Implement proper access control and security measures
-5. Return the complete contract code
-
-Keep responses concise and focused on the user's specific needs. When providing code examples, ensure they follow security best practices and include relevant comments.`;
+5. Return the complete contract code`;
 
 // Helper function to detect if the message is requesting contract generation
 function isContractRequest(message: string): boolean {
@@ -89,55 +87,47 @@ router.post('/api/chat', async (req, res) => {
       contractCode = completion.choices[0]?.message?.content || null;
 
       if (contractCode) {
-        try {
-          // First check if root folder exists
-          const rootFolderResult = await db.select().from(contracts).where(eq(contracts.name, 'Contracts')).limit(1);
-          let rootFolder = rootFolderResult[0];
+        // Get or create the root folder
+        let rootFolder = await db.query.contracts.findFirst({
+          where: eq(contracts.name, 'Contracts')
+        });
 
-          // If no root folder exists, create it
-          if (!rootFolder) {
-            const [newRootFolder] = await db.insert(contracts).values({
-              name: 'Contracts',
-              type: 'folder',
-              path: '',
-              parentId: null,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }).returning();
-            rootFolder = newRootFolder;
-          }
-
-          // Create the contract file with owner address
-          const fileName = `${contractName}.sol`;
-          const [newContract] = await db.insert(contracts).values({
-            name: fileName,
-            type: 'file',
-            path: `/${fileName}`,
-            parentId: rootFolder.id,
-            sourceCode: contractCode,
-            ownerAddress: walletAddress.toLowerCase(),
+        if (!rootFolder) {
+          const [newFolder] = await db.insert(contracts).values({
+            name: 'Contracts',
+            type: 'folder',
+            path: '',
+            parentId: null,
             createdAt: new Date(),
             updatedAt: new Date()
           }).returning();
-
-          // Force refresh file list by invalidating cache
-          await db.update(contracts)
-            .set({ updatedAt: new Date() })
-            .where(eq(contracts.id, rootFolder.id));
-
-          return res.json({
-            message: `I've generated the ${contractName} contract and created a new file ${fileName} in your explorer. You can now find it in your files list.`,
-            contractCode,
-            contractName: fileName,
-            contractId: newContract.id
-          });
-        } catch (error) {
-          console.error('Error creating contract file:', error);
-          return res.status(500).json({ 
-            error: 'Failed to create contract file',
-            details: error instanceof Error ? error.message : 'Unknown error'
-          });
+          rootFolder = newFolder;
         }
+
+        // Create the contract file with owner address
+        const fileName = `${contractName}.sol`;
+        const [newContract] = await db.insert(contracts).values({
+          name: fileName,
+          type: 'file',
+          path: `/${fileName}`,
+          parentId: rootFolder.id,
+          sourceCode: contractCode,
+          ownerAddress: walletAddress.toLowerCase(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }).returning();
+
+        // Force refresh folder by updating timestamp
+        await db.update(contracts)
+          .set({ updatedAt: new Date() })
+          .where(eq(contracts.id, rootFolder.id));
+
+        return res.json({
+          message: `I've generated the ${contractName} contract and saved it as ${fileName}. You can find it in your file explorer.`,
+          contractCode,
+          contractName: fileName,
+          contractId: newContract.id
+        });
       }
     }
 

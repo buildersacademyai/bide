@@ -129,7 +129,7 @@ export function FileExplorer({ onFileSelect }: Props) {
     };
   }, [queryClient, toast]);
 
-  const { data: contracts = [], isLoading } = useQuery<Contract[]>({
+  const { data: contracts = [], isLoading, refetch } = useQuery<Contract[]>({
     queryKey: ['/api/contracts', connectedAddress],
     queryFn: async () => {
       try {
@@ -198,6 +198,7 @@ export function FileExplorer({ onFileSelect }: Props) {
       setNewItemName('');
       setSelectedFolder(null);
       setIsCreatingFile(false);
+      refetch();//Added refetch here to update the list after creation.
     },
     onError: (error: Error) => {
       toast({
@@ -224,6 +225,7 @@ export function FileExplorer({ onFileSelect }: Props) {
         title: "Item updated",
         description: "Successfully updated the item",
       });
+      refetch();//Added refetch here to update the list after update.
     },
     onError: (error) => {
       toast({
@@ -263,6 +265,7 @@ export function FileExplorer({ onFileSelect }: Props) {
         description: "Contract deleted successfully",
       });
       setItemToDelete(null);
+      refetch();//Added refetch here to update the list after deletion.
     },
     onError: (error: Error) => {
       toast({

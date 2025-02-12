@@ -40,11 +40,13 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const walletAddress = await getConnectedAccount();
+    const headers: Record<string, string> = {
+      'x-wallet-address': walletAddress || '',
+    };
+
     const res = await fetch(queryKey[0] as string, {
       credentials: "include",
-      headers: {
-        'x-wallet-address': walletAddress || '',
-      }
+      headers
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

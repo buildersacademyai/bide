@@ -36,11 +36,31 @@ export function ChatBot({ onFileSelect }: Props) {
 
   useEffect(() => {
     const checkWallet = async () => {
-      const account = await getConnectedAccount();
-      setConnectedAddress(account);
+      try {
+        const account = await getConnectedAccount();
+        if (account !== connectedAddress) {
+          setConnectedAddress(account);
+          if (account) {
+            // Invalidate queries when wallet changes
+            await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+          }
+        }
+      } catch (error) {
+        console.error('Error checking wallet:', error);
+        toast({
+          variant: "destructive",
+          title: "Wallet Connection Error",
+          description: error instanceof Error ? error.message : "Failed to connect to wallet"
+        });
+      }
     };
+
     checkWallet();
-  }, [isOpen]);
+
+    // Poll for wallet changes
+    const interval = setInterval(checkWallet, 1000);
+    return () => clearInterval(interval);
+  }, [connectedAddress, queryClient, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,15 +116,17 @@ export function ChatBot({ onFileSelect }: Props) {
       setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
     } catch (error) {
       console.error('Chat error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process your request';
+
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: error instanceof Error ? error.message : 'Sorry, I encountered an error. Please make sure your wallet is connected and try again.'
+        content: `Sorry, I encountered an error: ${errorMessage}. Please make sure your wallet is connected and try again.`
       }]);
 
       toast({
         variant: "destructive",
         title: "Error",
-        description: error instanceof Error ? error.message : 'Failed to process your request'
+        description: errorMessage
       });
     } finally {
       setIsLoading(false);
