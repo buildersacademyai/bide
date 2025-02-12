@@ -113,22 +113,24 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
 
     const userMessage = input.trim().toLowerCase();
 
-    // Check if this is a compile/deploy command and verify contract selection
-    if ((userMessage === 'compile' || userMessage === 'deploy') && !currentContractId) {
+    const isCompileCommand = userMessage === 'compile';
+    const isDeployCommand = userMessage === 'deploy';
+
+    if ((isCompileCommand || isDeployCommand) && !currentContractId) {
+      const errorMessage = 'Please select a contract from the file explorer first.';
       setMessages(prev => [...prev, 
         { role: 'user', content: userMessage },
-        { role: 'assistant', content: 'Please select a contract from the file explorer first before attempting to compile or deploy.' }
+        { role: 'assistant', content: errorMessage }
       ]);
       toast({
         variant: "destructive",
         title: "No Contract Selected",
-        description: "Please select a contract from the file explorer first.",
+        description: errorMessage,
       });
       setInput('');
       return;
     }
 
-    // Check wallet connection first
     try {
       const account = await getConnectedAccount();
       if (!account) {
@@ -210,7 +212,6 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
         }
 
         try {
-          // Check MetaMask connection again before deployment
           if (!window.ethereum) {
             throw new Error('MetaMask not detected. Please install MetaMask to deploy contracts.');
           }
@@ -271,7 +272,7 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
 
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `I encountered an error: ${errorMessage}`
+        content: `Error: ${errorMessage}`
       }]);
 
       toast({
