@@ -23,7 +23,23 @@ When asked to generate a smart contract:
 2. Include SPDX license and pragma directive
 3. Add comprehensive comments explaining functionality
 4. Implement proper access control and security measures
-5. Return the complete contract code`;
+5. Return the complete contract code
+
+Format all generated contracts with the following structure:
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+/**
+ * @title [Contract Name]
+ * @dev [Contract Description - Detailed explanation of purpose and functionality]
+ * 
+ * [Additional Documentation]
+ * - [Key Feature 1]
+ * - [Key Feature 2]
+ * - [Security Considerations]
+ */
+
+[Contract Code with inline documentation]`;
 
 // Helper function to detect if the message is requesting contract generation
 function isContractRequest(message: string): boolean {
@@ -127,7 +143,24 @@ router.post('/api/chat', async (req, res) => {
     if (isGenerateRequest) {
       const { name, description } = extractContractSpecifications(message);
       contractName = name;
-      const contractPrompt = `Generate a complete, secure Solidity smart contract based on this description: "${description}". Name the contract "${contractName}". Include comprehensive comments and follow best practices.`;
+      const contractPrompt = `Generate a complete, secure Solidity smart contract based on this description: "${description}". 
+Follow this structure:
+1. Start with SPDX license and pragma directive
+2. Add comprehensive NatSpec documentation including:
+   - @title with contract name "${contractName}"
+   - @dev with detailed contract description
+   - @notice explaining contract purpose
+   - @custom tags for special features
+3. Document all functions with:
+   - @dev explaining implementation details
+   - @param for each parameter
+   - @return for return values
+4. Include inline comments for complex logic
+5. Implement security best practices
+6. Add events for important state changes
+7. Use proper access control modifiers
+
+Format the contract following Solidity style guide.`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4",
