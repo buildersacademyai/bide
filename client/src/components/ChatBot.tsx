@@ -111,11 +111,24 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    if (!connectedAddress) {
+    // Check wallet connection first
+    try {
+      const account = await getConnectedAccount();
+      if (!account) {
+        toast({
+          variant: "destructive",
+          title: "Wallet not connected",
+          description: "Please connect your MetaMask wallet to continue.",
+        });
+        return;
+      }
+      setConnectedAddress(account);
+    } catch (error) {
+      console.error('Wallet connection error:', error);
       toast({
         variant: "destructive",
-        title: "Wallet not connected",
-        description: "Please connect your wallet to use the AI assistant",
+        title: "Wallet Connection Error",
+        description: "Failed to connect to your wallet. Please make sure MetaMask is installed and unlocked."
       });
       return;
     }
@@ -130,7 +143,7 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-wallet-address': connectedAddress
+          'x-wallet-address': connectedAddress || ''
         },
         body: JSON.stringify({ 
           message: userMessage,
@@ -139,8 +152,15 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.details || 'Failed to get response');
+        let errorMessage = 'Failed to get response';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.details || errorData.message || errorMessage;
+        } catch (e) {
+          // If parsing fails, use the status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
       const data: ChatResponse = await response.json();
@@ -175,6 +195,16 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
         }
 
         try {
+          // Check MetaMask connection again before deployment
+          if (!window.ethereum) {
+            throw new Error('MetaMask not detected. Please install MetaMask to deploy contracts.');
+          }
+
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          if (!accounts || accounts.length === 0) {
+            throw new Error('Please connect your MetaMask wallet to deploy contracts.');
+          }
+
           const deploymentResult = await deployContract(
             data.deployment.bytecode,
             data.deployment.abi
@@ -226,7 +256,7 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
 
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `Sorry, I encountered an error: ${errorMessage}. Please make sure your wallet is connected and try again.`
+        content: `I encountered an error: ${errorMessage}. Please make sure your wallet is connected and try again.`
       }]);
 
       toast({
