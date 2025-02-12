@@ -41,7 +41,6 @@ export function ChatBot({ onFileSelect }: Props) {
         if (account !== connectedAddress) {
           setConnectedAddress(account);
           if (account) {
-            // Invalidate queries when wallet changes
             await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
           }
         }
@@ -57,7 +56,6 @@ export function ChatBot({ onFileSelect }: Props) {
 
     checkWallet();
 
-    // Poll for wallet changes
     const interval = setInterval(checkWallet, 1000);
     return () => clearInterval(interval);
   }, [connectedAddress, queryClient, toast]);
@@ -99,7 +97,6 @@ export function ChatBot({ onFileSelect }: Props) {
 
       // Handle contract generation response
       if (data.contractCode && data.contractName && data.contractId) {
-        // Invalidate contracts query to refresh file explorer
         await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
         toast({
@@ -107,13 +104,22 @@ export function ChatBot({ onFileSelect }: Props) {
           description: `Created new contract: ${data.contractName}`,
         });
 
-        // Load the contract into the editor if onFileSelect is provided
         if (onFileSelect) {
           onFileSelect(data.contractCode, data.contractId);
-        }
-      }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+          setMessages(prev => [
+            ...prev, 
+            { 
+              role: 'assistant', 
+              content: `${data.message}\n\nI've loaded the contract into the editor for you to review and modify.`
+            }
+          ]);
+        } else {
+          setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+        }
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+      }
     } catch (error) {
       console.error('Chat error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to process your request';
@@ -135,7 +141,6 @@ export function ChatBot({ onFileSelect }: Props) {
 
   return (
     <>
-      {/* Bot Icon */}
       <Button
         className={cn(
           "fixed bottom-4 right-4 p-3 rounded-full shadow-lg",
@@ -147,10 +152,8 @@ export function ChatBot({ onFileSelect }: Props) {
         <Bot className="h-6 w-6" />
       </Button>
 
-      {/* Chat Interface */}
       {isOpen && (
         <Card className="fixed bottom-4 right-4 w-[400px] h-[600px] shadow-xl flex flex-col">
-          {/* Header */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5" />
@@ -165,7 +168,6 @@ export function ChatBot({ onFileSelect }: Props) {
             </Button>
           </div>
 
-          {/* Messages */}
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
               {!connectedAddress ? (
@@ -225,7 +227,6 @@ export function ChatBot({ onFileSelect }: Props) {
             </div>
           </ScrollArea>
 
-          {/* Input */}
           <form onSubmit={handleSubmit} className="p-4 border-t">
             <div className="flex gap-2">
               <Input
