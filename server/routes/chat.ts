@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 import { Router } from 'express';
+import { db } from "@db";
+import { contracts } from "@db/schema";
 
 const router = Router();
 
@@ -15,13 +17,90 @@ const SYSTEM_MESSAGE = `You are a helpful blockchain development assistant speci
 4. Debug common issues
 5. Answer questions about Ethereum and blockchain development
 
+When asked to generate a smart contract:
+1. Create a well-documented, secure contract following best practices
+2. Include SPDX license and pragma directive
+3. Add comprehensive comments explaining functionality
+4. Implement proper access control and security measures
+5. Return the complete contract code
+
 Keep responses concise and focused on the user's specific needs. When providing code examples, ensure they follow security best practices and include relevant comments.`;
+
+// Helper function to detect if the message is requesting contract generation
+function isContractRequest(message: string): boolean {
+  const contractKeywords = [
+    'create contract',
+    'generate contract',
+    'write contract',
+    'make contract',
+    'new contract'
+  ];
+  return contractKeywords.some(keyword => message.toLowerCase().includes(keyword));
+}
+
+// Helper function to extract contract name from message
+function extractContractName(message: string): string {
+  const defaultName = 'GeneratedContract';
+  const words = message.split(' ');
+  const contractWords = words.filter(word => 
+    word.length > 2 && 
+    !['contract', 'for', 'create', 'generate', 'write', 'make', 'new', 'the'].includes(word.toLowerCase())
+  );
+
+  if (contractWords.length === 0) return defaultName;
+
+  // Capitalize first letter and remove special characters
+  const name = contractWords[0].replace(/[^a-zA-Z0-9]/g, '');
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
 
 router.post('/api/chat', async (req, res) => {
   try {
     const { message } = req.body;
+    const walletAddress = req.headers['x-wallet-address'] as string;
+
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const isGenerateRequest = isContractRequest(message);
+    let contractCode = null;
+    let contractName = null;
+
+    if (isGenerateRequest) {
+      contractName = extractContractName(message);
+      const contractPrompt = `Generate a complete, secure Solidity smart contract based on this description: "${message}". Name the contract "${contractName}". Include comprehensive comments and follow best practices.`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          { role: "system", content: SYSTEM_MESSAGE },
+          { role: "user", content: contractPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      });
+
+      contractCode = completion.choices[0]?.message?.content || null;
+
+      if (contractCode && walletAddress) {
+        // Create a new file in the explorer
+        const fileName = `${contractName}.sol`;
+        await db.insert(contracts).values({
+          name: fileName,
+          type: 'file',
+          sourceCode: contractCode,
+          ownerAddress: walletAddress.toLowerCase(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+        return res.json({
+          message: `I've generated the ${contractName} contract and created a new file ${fileName} in your explorer. You can now find it in your files list.`,
+          contractCode,
+          contractName: fileName
+        });
+      }
     }
 
     const completion = await openai.chat.completions.create({

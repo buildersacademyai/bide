@@ -5,10 +5,18 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Bot, X, Send, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+}
+
+interface ChatResponse {
+  message: string;
+  contractCode?: string;
+  contractName?: string;
 }
 
 export function ChatBot() {
@@ -16,6 +24,8 @@ export function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +47,19 @@ export function ChatBot() {
         throw new Error('Failed to get response');
       }
 
-      const data = await response.json();
+      const data: ChatResponse = await response.json();
+
+      // Handle contract generation response
+      if (data.contractCode && data.contractName) {
+        // Invalidate contracts query to refresh file explorer
+        await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+
+        toast({
+          title: "Contract Generated",
+          description: `Created new contract: ${data.contractName}`,
+        });
+      }
+
       setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
     } catch (error) {
       console.error('Chat error:', error);
@@ -94,6 +116,9 @@ export function ChatBot() {
                     <li>• Deployment assistance</li>
                     <li>• Best practices</li>
                   </ul>
+                  <p className="mt-4 text-sm">
+                    Try saying: "Create a token contract" or "Generate an NFT contract"
+                  </p>
                 </div>
               ) : (
                 messages.map((msg, i) => (
