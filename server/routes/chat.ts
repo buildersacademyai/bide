@@ -32,25 +32,79 @@ function isContractRequest(message: string): boolean {
     'generate contract',
     'write contract',
     'make contract',
-    'new contract'
+    'new contract',
+    'contract for',
+    'create a contract',
+    'create smart contract',
+    'create a smart contract',
+    'contract that',
+    'contract which'
   ];
-  return contractKeywords.some(keyword => message.toLowerCase().includes(keyword));
+
+  const lowercaseMessage = message.toLowerCase();
+
+  // Check for standard patterns
+  if (contractKeywords.some(keyword => lowercaseMessage.includes(keyword))) {
+    return true;
+  }
+
+  // Check for "create [something] contract" pattern
+  if (/create .+ contract/.test(lowercaseMessage)) {
+    return true;
+  }
+
+  // Check for "contract [description]" at start
+  if (lowercaseMessage.startsWith('contract ')) {
+    return true;
+  }
+
+  return false;
 }
 
-// Helper function to extract contract name from message
-function extractContractName(message: string): string {
+// Helper function to extract contract specifications from the message
+function extractContractSpecifications(message: string): { name: string; description: string } {
   const defaultName = 'GeneratedContract';
-  const words = message.split(' ');
-  const contractWords = words.filter(word => 
-    word.length > 2 && 
-    !['contract', 'for', 'create', 'generate', 'write', 'make', 'new', 'the'].includes(word.toLowerCase())
-  );
+  let contractName = defaultName;
+  let description = message;
 
-  if (contractWords.length === 0) return defaultName;
+  const lowercaseMessage = message.toLowerCase();
 
-  // Capitalize first letter and remove special characters
-  const name = contractWords[0].replace(/[^a-zA-Z0-9]/g, '');
-  return name.charAt(0).toUpperCase() + name.slice(1);
+  // Try to extract name from various patterns
+  const patterns = [
+    /create (?:a |an )?(?:smart )?contract (?:called |named )?["']?([a-zA-Z0-9]+)["']?/i,
+    /create ["']?([a-zA-Z0-9]+)["']? contract/i,
+    /contract (?:called |named )?["']?([a-zA-Z0-9]+)["']?/i,
+    /generate (?:a |an )?(?:smart )?contract (?:called |named )?["']?([a-zA-Z0-9]+)["']?/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      contractName = match[1];
+      // Remove the name part from description
+      description = message.replace(pattern, '').trim();
+      break;
+    }
+  }
+
+  // If no name found through patterns, use the first relevant word
+  if (contractName === defaultName) {
+    const words = message.split(' ');
+    const relevantWord = words.find(word => 
+      word.length > 2 && 
+      !['contract', 'for', 'create', 'generate', 'write', 'make', 'new', 'the', 'smart'].includes(word.toLowerCase())
+    );
+
+    if (relevantWord) {
+      contractName = relevantWord.replace(/[^a-zA-Z0-9]/g, '');
+      contractName = contractName.charAt(0).toUpperCase() + contractName.slice(1);
+    }
+  }
+
+  return {
+    name: contractName,
+    description: description
+  };
 }
 
 router.post('/api/chat', async (req, res) => {
@@ -71,8 +125,9 @@ router.post('/api/chat', async (req, res) => {
     let contractName = null;
 
     if (isGenerateRequest) {
-      contractName = extractContractName(message);
-      const contractPrompt = `Generate a complete, secure Solidity smart contract based on this description: "${message}". Name the contract "${contractName}". Include comprehensive comments and follow best practices.`;
+      const { name, description } = extractContractSpecifications(message);
+      contractName = name;
+      const contractPrompt = `Generate a complete, secure Solidity smart contract based on this description: "${description}". Name the contract "${contractName}". Include comprehensive comments and follow best practices.`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4",
