@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Bot, X, Send, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { getConnectedAccount } from '@/lib/web3';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -24,12 +25,30 @@ export function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const checkWallet = async () => {
+      const account = await getConnectedAccount();
+      setConnectedAddress(account);
+    };
+    checkWallet();
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
+
+    if (!connectedAddress) {
+      toast({
+        variant: "destructive",
+        title: "Wallet not connected",
+        description: "Please connect your wallet to use the AI assistant",
+      });
+      return;
+    }
 
     const userMessage = input.trim();
     setInput('');
@@ -39,7 +58,10 @@ export function ChatBot() {
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-wallet-address': connectedAddress
+        },
         body: JSON.stringify({ message: userMessage }),
       });
 
@@ -65,7 +87,7 @@ export function ChatBot() {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Sorry, I encountered an error. Please try again.' 
+        content: 'Sorry, I encountered an error. Please make sure your wallet is connected and try again.' 
       }]);
     } finally {
       setIsLoading(false);
@@ -107,7 +129,11 @@ export function ChatBot() {
           {/* Messages */}
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
-              {messages.length === 0 ? (
+              {!connectedAddress ? (
+                <div className="text-center text-muted-foreground">
+                  <p className="text-red-500">Please connect your wallet to use the AI assistant</p>
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="text-center text-muted-foreground">
                   <p>👋 Hello! I can help you with:</p>
                   <ul className="text-sm mt-2">
@@ -166,10 +192,10 @@ export function ChatBot() {
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about smart contracts..."
-                disabled={isLoading}
+                placeholder={connectedAddress ? "Ask about smart contracts..." : "Connect wallet to chat..."}
+                disabled={isLoading || !connectedAddress}
               />
-              <Button type="submit" size="icon" disabled={isLoading}>
+              <Button type="submit" size="icon" disabled={isLoading || !connectedAddress}>
                 <Send className="h-4 w-4" />
               </Button>
             </div>
