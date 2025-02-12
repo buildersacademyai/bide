@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { User, Loader2, LogOut } from "lucide-react";
+import { User, Loader2, LogOut, Wallet } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ethers } from "ethers";
 
@@ -53,17 +53,20 @@ export function UserProfile({ address }: { address: string }) {
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon">
-          <User className="h-[1.2rem] w-[1.2rem]" />
+        <Button variant="outline" size="sm" className="gap-2">
+          <Wallet className="h-4 w-4" />
+          <span className="hidden sm:inline">
+            {address.slice(0, 6)}...{address.slice(-4)}
+          </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[300px]">
         <DropdownMenuLabel>
           <div className="space-y-4">
             <div>
-              <div className="text-sm font-medium">Wallet Address</div>
+              <div className="text-sm font-medium">Connected Wallet</div>
               <code className="text-xs text-muted-foreground block mt-1 bg-muted p-2 rounded">
-                {address.slice(0,8)}...{address.slice(30)}
+                {address}
               </code>
             </div>
 
@@ -84,7 +87,7 @@ export function UserProfile({ address }: { address: string }) {
                 {network && (
                   <div>
                     <div className="text-sm font-medium">Network</div>
-                    <div className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-800">
+                    <div className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
                       {network}
                     </div>
                   </div>
@@ -95,9 +98,9 @@ export function UserProfile({ address }: { address: string }) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="p-2">
-          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleLogout}>
+          <Button variant="ghost" size="sm" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100/50 dark:hover:bg-red-900/20" onClick={handleLogout}>
             <LogOut className="h-4 w-4 mr-2" />
-            Disconnect
+            Disconnect Wallet
           </Button>
         </div>
       </DropdownMenuContent>
