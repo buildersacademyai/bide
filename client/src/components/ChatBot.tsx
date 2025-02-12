@@ -111,6 +111,23 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    const userMessage = input.trim().toLowerCase();
+
+    // Check if this is a compile/deploy command and verify contract selection
+    if ((userMessage === 'compile' || userMessage === 'deploy') && !currentContractId) {
+      setMessages(prev => [...prev, 
+        { role: 'user', content: userMessage },
+        { role: 'assistant', content: 'Please select a contract from the file explorer first before attempting to compile or deploy.' }
+      ]);
+      toast({
+        variant: "destructive",
+        title: "No Contract Selected",
+        description: "Please select a contract from the file explorer first.",
+      });
+      setInput('');
+      return;
+    }
+
     // Check wallet connection first
     try {
       const account = await getConnectedAccount();
@@ -133,7 +150,6 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
       return;
     }
 
-    const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
@@ -155,9 +171,8 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
         let errorMessage = 'Failed to get response';
         try {
           const errorData = await response.json();
-          errorMessage = errorData.details || errorData.message || errorMessage;
+          errorMessage = errorData.message || errorData.details || errorMessage;
         } catch (e) {
-          // If parsing fails, use the status text
           errorMessage = response.statusText || errorMessage;
         }
         throw new Error(errorMessage);
@@ -256,7 +271,7 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
 
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `I encountered an error: ${errorMessage}. Please make sure your wallet is connected and try again.`
+        content: `I encountered an error: ${errorMessage}`
       }]);
 
       toast({
