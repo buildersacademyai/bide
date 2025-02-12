@@ -19,13 +19,16 @@ interface ChatResponse {
   contractCode?: string;
   contractName?: string;
   contractId?: number;
+  action?: 'compile' | 'deploy';
 }
 
 interface Props {
   onFileSelect?: (content: string, contractId: number) => void;
+  onCompile?: () => Promise<boolean>;
+  onDeploy?: () => Promise<boolean>;
 }
 
-export function ChatBot({ onFileSelect }: Props) {
+export function ChatBot({ onFileSelect, onCompile, onDeploy }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -55,7 +58,6 @@ export function ChatBot({ onFileSelect }: Props) {
     };
 
     checkWallet();
-
     const interval = setInterval(checkWallet, 1000);
     return () => clearInterval(interval);
   }, [connectedAddress, queryClient, toast]);
@@ -94,6 +96,54 @@ export function ChatBot({ onFileSelect }: Props) {
       }
 
       const data: ChatResponse = await response.json();
+
+      if (data.action === 'compile' && onCompile) {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Starting compilation...' }]);
+        try {
+          const success = await onCompile();
+          if (success) {
+            setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: 'Contract compiled successfully! You can now deploy it if you wish.' 
+            }]);
+          } else {
+            setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: 'Compilation failed. Please check the compilation output for errors.' 
+            }]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: 'Failed to compile the contract. Please ensure your code is valid.' 
+          }]);
+        }
+        return;
+      }
+
+      if (data.action === 'deploy' && onDeploy) {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Starting deployment process...' }]);
+        try {
+          const success = await onDeploy();
+          if (success) {
+            setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: 'Contract deployed successfully! You can now interact with it on the blockchain.' 
+            }]);
+          } else {
+            setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: 'Deployment failed. Please ensure your contract is compiled and you have enough ETH for gas.' 
+            }]);
+          }
+        } catch (error) {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: 'Failed to deploy the contract. Please check your wallet balance and network connection.' 
+          }]);
+        }
+        return;
+      }
 
       // Handle contract generation response
       if (data.contractCode && data.contractName && data.contractId) {
@@ -179,8 +229,8 @@ export function ChatBot({ onFileSelect }: Props) {
                   <p>👋 Hello! I can help you with:</p>
                   <ul className="text-sm mt-2">
                     <li>• Writing smart contracts</li>
-                    <li>• Explaining contract code</li>
-                    <li>• Deployment assistance</li>
+                    <li>• Compiling contracts (just say "compile")</li>
+                    <li>• Deploying contracts (just say "deploy")</li>
                     <li>• Best practices</li>
                   </ul>
                   <p className="mt-4 text-sm">

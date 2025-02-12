@@ -9,7 +9,7 @@ const router = Router();
 // Initialize OpenAI client
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// System message to define the AI assistant's role
+// System message remains unchanged
 const SYSTEM_MESSAGE = `You are a helpful blockchain development assistant specializing in Solidity smart contracts. Your main tasks are:
 
 1. Help users write and understand smart contracts
@@ -41,7 +41,19 @@ pragma solidity ^0.8.0;
 
 [Contract Code with inline documentation]`;
 
-// Helper function to detect if the message is requesting contract generation
+// Helper function to detect if the message is a compile command
+function isCompileCommand(message: string): boolean {
+  const compileKeywords = ['compile', 'build contract', 'build the contract'];
+  return compileKeywords.some(keyword => message.toLowerCase().trim() === keyword);
+}
+
+// Helper function to detect if the message is a deploy command
+function isDeployCommand(message: string): boolean {
+  const deployKeywords = ['deploy', 'deploy contract', 'deploy the contract'];
+  return deployKeywords.some(keyword => message.toLowerCase().trim() === keyword);
+}
+
+// Existing helper functions remain unchanged
 function isContractRequest(message: string): boolean {
   const contractKeywords = [
     'create contract',
@@ -59,17 +71,14 @@ function isContractRequest(message: string): boolean {
 
   const lowercaseMessage = message.toLowerCase();
 
-  // Check for standard patterns
   if (contractKeywords.some(keyword => lowercaseMessage.includes(keyword))) {
     return true;
   }
 
-  // Check for "create [something] contract" pattern
   if (/create .+ contract/.test(lowercaseMessage)) {
     return true;
   }
 
-  // Check for "contract [description]" at start
   if (lowercaseMessage.startsWith('contract ')) {
     return true;
   }
@@ -77,7 +86,7 @@ function isContractRequest(message: string): boolean {
   return false;
 }
 
-// Helper function to extract contract specifications from the message
+// Previous helper functions remain unchanged
 function extractContractSpecifications(message: string): { name: string; description: string } {
   const defaultName = 'GeneratedContract';
   let contractName = defaultName;
@@ -136,6 +145,23 @@ router.post('/api/chat', async (req, res) => {
       return res.status(401).json({ error: 'Wallet address is required' });
     }
 
+    // Check for compile command
+    if (isCompileCommand(message)) {
+      return res.json({
+        message: "Starting contract compilation...",
+        action: "compile"
+      });
+    }
+
+    // Check for deploy command
+    if (isDeployCommand(message)) {
+      return res.json({
+        message: "Initiating contract deployment process...",
+        action: "deploy"
+      });
+    }
+
+    // Rest of the existing contract generation logic remains unchanged
     const isGenerateRequest = isContractRequest(message);
     let contractCode = null;
     let contractName = null;
@@ -198,7 +224,7 @@ Format the contract following Solidity style guide.`;
           name: fileName,
           type: 'file',
           path: `/${fileName}`,
-          parentId: rootFolder.id,
+          parentId: rootFolder?.id, 
           sourceCode: contractCode,
           ownerAddress: walletAddress.toLowerCase(),
           createdAt: new Date(),
@@ -206,9 +232,11 @@ Format the contract following Solidity style guide.`;
         }).returning();
 
         // Force refresh folder by updating timestamp
-        await db.update(contracts)
-          .set({ updatedAt: new Date() })
-          .where(eq(contracts.id, rootFolder.id));
+        if (rootFolder) { 
+          await db.update(contracts)
+            .set({ updatedAt: new Date() })
+            .where(eq(contracts.id, rootFolder.id));
+        }
 
         return res.json({
           message: `I've generated the ${contractName} contract and saved it as ${fileName}. You can find it in your file explorer.`,
