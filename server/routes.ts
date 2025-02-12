@@ -4,6 +4,7 @@ import { db } from "@db";
 import { contracts } from "@db/schema";
 import { eq, and, desc, or } from "drizzle-orm";
 import solc from 'solc';
+import chatRouter from './routes/chat';
 
 // Middleware to verify wallet ownership
 const verifyWalletOwnership = (req: any, res: any, next: any) => {
@@ -18,6 +19,9 @@ const verifyWalletOwnership = (req: any, res: any, next: any) => {
 export function registerRoutes(app: Express): Server {
   // Apply wallet verification middleware to contract routes
   app.use('/api/contracts', verifyWalletOwnership);
+
+  // Register chat routes
+  app.use(chatRouter);
 
   app.post("/api/compile", async (req, res) => {
     try {

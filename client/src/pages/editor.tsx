@@ -15,7 +15,7 @@ import { ContractDeployer } from '@/components/ContractDeployer';
 import { TransactionHistory } from '@/components/TransactionHistory';
 import { ContractInteraction } from '@/components/ContractInteraction';
 import { VerifiedContracts } from '@/components/VerifiedContracts'; // Import the VerifiedContracts component
-
+import { ChatBot } from '@/components/ChatBot';
 
 const DEFAULT_CONTRACT = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
@@ -259,6 +259,7 @@ export default function Editor() {
           </Tabs>
         </div>
       </div>
+      <ChatBot />
     </div>
   );
 }
