@@ -5,6 +5,7 @@ import { contracts } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { compileContract } from '../services/compiler';
 import { deployContract } from '../services/deployer';
+import { prepareDeploymentData } from '../services/deployer';
 
 const router = Router();
 
@@ -204,14 +205,17 @@ router.post('/api/chat', async (req, res) => {
       }
 
       // Return the contract data for client-side deployment
+      const deploymentData = await prepareDeploymentData(
+        contract.bytecode,
+        JSON.parse(contract.abi),
+        walletAddress
+      );
+
       return res.json({
         message: "Ready for deployment",
         action: "deploy",
         success: true,
-        deployment: {
-          bytecode: contract.bytecode,
-          abi: JSON.parse(contract.abi)
-        }
+        deployment: deploymentData
       });
     }
 
