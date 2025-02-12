@@ -3,13 +3,15 @@ import { Router } from 'express';
 import { db } from "@db";
 import { contracts } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { compileContract } from '../services/compiler';
+import { deployContract } from '../services/deployer';
 
 const router = Router();
 
 // Initialize OpenAI client
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// System message remains unchanged
+// System message 
 const SYSTEM_MESSAGE = `You are a helpful blockchain development assistant specializing in Solidity smart contracts. Your main tasks are:
 
 1. Help users write and understand smart contracts
@@ -23,23 +25,7 @@ When asked to generate a smart contract:
 2. Include SPDX license and pragma directive
 3. Add comprehensive comments explaining functionality
 4. Implement proper access control and security measures
-5. Return the complete contract code
-
-Format all generated contracts with the following structure:
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-/**
- * @title [Contract Name]
- * @dev [Contract Description - Detailed explanation of purpose and functionality]
- * 
- * [Additional Documentation]
- * - [Key Feature 1]
- * - [Key Feature 2]
- * - [Security Considerations]
- */
-
-[Contract Code with inline documentation]`;
+5. Return the complete contract code`;
 
 // Helper function to detect if the message is a compile command
 function isCompileCommand(message: string): boolean {
@@ -53,7 +39,7 @@ function isDeployCommand(message: string): boolean {
   return deployKeywords.some(keyword => message.toLowerCase().trim() === keyword);
 }
 
-// Existing helper functions remain unchanged
+// Existing helper functions
 function isContractRequest(message: string): boolean {
   const contractKeywords = [
     'create contract',
@@ -86,7 +72,6 @@ function isContractRequest(message: string): boolean {
   return false;
 }
 
-// Previous helper functions remain unchanged
 function extractContractSpecifications(message: string): { name: string; description: string } {
   const defaultName = 'GeneratedContract';
   let contractName = defaultName;
@@ -134,7 +119,7 @@ function extractContractSpecifications(message: string): { name: string; descrip
 
 router.post('/api/chat', async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, contractId } = req.body;
     const walletAddress = req.headers['x-wallet-address'] as string;
 
     if (!message) {
@@ -145,23 +130,112 @@ router.post('/api/chat', async (req, res) => {
       return res.status(401).json({ error: 'Wallet address is required' });
     }
 
-    // Check for compile command
+    // Handle compilation command
     if (isCompileCommand(message)) {
-      return res.json({
-        message: "Starting contract compilation...",
-        action: "compile"
+      if (!contractId) {
+        return res.status(400).json({
+          message: "Please select a contract to compile first",
+          action: "compile",
+          success: false
+        });
+      }
+
+      // Get the contract from database
+      const contract = await db.query.contracts.findFirst({
+        where: eq(contracts.id, contractId)
       });
+
+      if (!contract || !contract.sourceCode) {
+        return res.status(404).json({
+          message: "Contract not found or has no source code",
+          action: "compile",
+          success: false
+        });
+      }
+
+      try {
+        // Compile the contract
+        const compilationResult = await compileContract(contract.sourceCode);
+
+        // Update contract in database with compilation result
+        await db.update(contracts)
+          .set({
+            bytecode: compilationResult.bytecode,
+            abi: JSON.stringify(compilationResult.abi),
+            updatedAt: new Date()
+          })
+          .where(eq(contracts.id, contractId));
+
+        return res.json({
+          message: "Contract compiled successfully",
+          action: "compile",
+          success: true,
+          compilation: compilationResult
+        });
+      } catch (error) {
+        return res.status(400).json({
+          message: `Compilation failed: ${error.message}`,
+          action: "compile",
+          success: false
+        });
+      }
     }
 
-    // Check for deploy command
+    // Handle deployment command
     if (isDeployCommand(message)) {
-      return res.json({
-        message: "Initiating contract deployment process...",
-        action: "deploy"
+      if (!contractId) {
+        return res.status(400).json({
+          message: "Please select a contract to deploy first",
+          action: "deploy",
+          success: false
+        });
+      }
+
+      const contract = await db.query.contracts.findFirst({
+        where: eq(contracts.id, contractId)
       });
+
+      if (!contract || !contract.bytecode || !contract.abi) {
+        return res.status(400).json({
+          message: "Contract not found or not compiled. Please compile the contract first.",
+          action: "deploy",
+          success: false
+        });
+      }
+
+      try {
+        // Deploy the contract
+        const deploymentResult = await deployContract(
+          contract.bytecode,
+          JSON.parse(contract.abi),
+          walletAddress
+        );
+
+        // Update contract in database with deployment info
+        await db.update(contracts)
+          .set({
+            address: deploymentResult.address,
+            network: deploymentResult.network,
+            deployedAt: new Date(),
+            updatedAt: new Date()
+          })
+          .where(eq(contracts.id, contractId));
+
+        return res.json({
+          message: `Contract deployed successfully at ${deploymentResult.address}`,
+          action: "deploy",
+          success: true,
+          deployment: deploymentResult
+        });
+      } catch (error) {
+        return res.status(400).json({
+          message: `Deployment failed: ${error.message}`,
+          action: "deploy",
+          success: false
+        });
+      }
     }
 
-    // Rest of the existing contract generation logic remains unchanged
     const isGenerateRequest = isContractRequest(message);
     let contractCode = null;
     let contractName = null;
@@ -260,7 +334,7 @@ Format the contract following Solidity style guide.`;
     const response = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response';
     res.json({ message: response });
   } catch (error) {
-    console.error('OpenAI API error:', error);
+    console.error('API error:', error);
     res.status(500).json({ 
       error: 'Failed to process your request',
       details: error instanceof Error ? error.message : 'Unknown error'

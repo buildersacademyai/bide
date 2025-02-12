@@ -20,13 +20,16 @@ interface ChatResponse {
   contractName?: string;
   contractId?: number;
   action?: 'compile' | 'deploy';
+  success?: boolean;
+  compilation?: any;
+  deployment?: any;
 }
 
 interface Props {
   onFileSelect?: (content: string, contractId: number) => void;
-  onCompile?: () => Promise<boolean>;
-  onDeploy?: () => Promise<boolean>;
-  currentContractId?: number; // Add current contract ID prop
+  onCompile?: (compilationResult: any) => Promise<boolean>;
+  onDeploy?: (deploymentResult: any) => Promise<boolean>;
+  currentContractId?: number;
 }
 
 export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }: Props) {
@@ -88,7 +91,10 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
           'Content-Type': 'application/json',
           'x-wallet-address': connectedAddress
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ 
+          message: userMessage,
+          contractId: currentContractId // Pass the current contract ID
+        }),
       });
 
       if (!response.ok) {
@@ -98,63 +104,49 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
 
       const data: ChatResponse = await response.json();
 
-      if (data.action === 'compile' && onCompile) {
-        if (!currentContractId) {
+      // Handle compile action
+      if (data.action === 'compile') {
+        if (!data.success) {
           setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: 'Please open a contract in the editor first before compiling.' 
+            content: data.message || 'Compilation failed. Please check your code and try again.'
           }]);
           return;
         }
 
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Starting compilation...' }]);
-        try {
-          const success = await onCompile();
-          if (success) {
-            setMessages(prev => [...prev, { 
-              role: 'assistant', 
-              content: 'Contract compiled successfully! You can now deploy it if you wish.' 
-            }]);
-          } else {
-            setMessages(prev => [...prev, { 
-              role: 'assistant', 
-              content: 'Compilation failed. Please check the compilation output for errors.' 
-            }]);
-          }
-        } catch (error) {
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
-            content: 'Failed to compile the contract. Please ensure your code is valid.' 
-          }]);
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: 'Contract compiled successfully! You can now deploy it if you wish.' 
+        }]);
+
+        if (onCompile && data.compilation) {
+          await onCompile(data.compilation);
         }
         return;
       }
 
-      if (data.action === 'deploy' && onDeploy) {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Starting deployment process...' }]);
-        try {
-          const success = await onDeploy();
-          if (success) {
-            setMessages(prev => [...prev, { 
-              role: 'assistant', 
-              content: 'Contract deployed successfully! You can now interact with it on the blockchain.' 
-            }]);
-          } else {
-            setMessages(prev => [...prev, { 
-              role: 'assistant', 
-              content: 'Deployment failed. Please ensure your contract is compiled and you have enough ETH for gas.' 
-            }]);
-          }
-        } catch (error) {
+      // Handle deploy action
+      if (data.action === 'deploy') {
+        if (!data.success) {
           setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: 'Failed to deploy the contract. Please check your wallet balance and network connection.' 
+            content: data.message || 'Deployment failed. Please ensure your contract is compiled and you have enough ETH for gas.'
           }]);
+          return;
+        }
+
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: `Contract deployed successfully! You can now interact with it at address: ${data.deployment?.address}`
+        }]);
+
+        if (onDeploy && data.deployment) {
+          await onDeploy(data.deployment);
         }
         return;
       }
 
-      // Handle contract generation response
+      // Handle contract generation
       if (data.contractCode && data.contractName && data.contractId) {
         await queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
@@ -165,7 +157,6 @@ export function ChatBot({ onFileSelect, onCompile, onDeploy, currentContractId }
 
         if (onFileSelect) {
           onFileSelect(data.contractCode, data.contractId);
-
           setMessages(prev => [
             ...prev, 
             { 
